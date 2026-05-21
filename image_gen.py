@@ -159,7 +159,7 @@ def generate_portrait(description: str, session_id: str, style: str = "写实", 
 
     gender_word = "女性" if gender == "female" else "男性" if gender == "male" else "学生"
 
-    prompt = f"""生成一张{gender_word}大学生的半身肖像画。
+    prompt = f"""生成一张{gender_word}大学生的肖像画。
 
 {style_info["prompt_suffix"]}
 

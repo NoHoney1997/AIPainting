@@ -431,51 +431,20 @@ def parse_user_input_with_llm(stage: str, user_input: str, context: Dict[str, An
         return {}
 
 def generate_guide_message(stage: str, context: Dict[str, Any] = None) -> str:
-    """根据当前阶段生成引导语，使用LLM判断状态/事件模式"""
+    """根据当前阶段生成引导语"""
     context = context or {}
-    ref = STAGE_REFS.get(stage, "请继续。")
 
+    # 获取变量值
     name = context.get("name", st.session_state.get("character_name", "TA"))
-    summary = context.get("summary", "")
-    quote = context.get("quote", "")
+    summary = context.get("summary", st.session_state.get("summary", ""))
+    quote = context.get("quote", st.session_state.get("quote", ""))
 
-    # 使用 LLM 判断用户最近的描述是事件还是状态
-    is_state = False
-    recent_user_msgs = [m for m in st.session_state.messages if m["role"] == "user"][-2:]
-
-    if recent_user_msgs:
-        combined_input = " ".join([msg["content"] for msg in recent_user_msgs])
-        is_state = is_state_description(combined_input, context)
-
-    # 根据阶段和模式动态调整引导语
-    if stage == "A1a":
-        if is_state:
-            ref = f"理解了。{name}的这种状态具体在什么场合下会更明显？有没有哪一次让TA印象特别深？"
-        else:
-            ref = ref.replace("{name}", name)
-
-    elif stage == "A1b":
-        if is_state:
-            ref = f"{name}在这种状态下，最常出现的情境是什么？当时还有谁在？"
-        else:
-            ref = ref.replace("{name}", name)
-
-    elif stage == "B1a":
-        if is_state:
-            ref = f"明白了。{name}在人际关系上这种状态持续多久了？在什么情况下会更明显？"
-        else:
-            ref = ref.replace("{name}", name)
-
-    elif stage == "B1b":
-        if is_state:
-            ref = f"嗯，那{name}在这种状态下，通常会有怎样的感受或想法？"
-        else:
-            ref = ref.replace("{name}", name)
-
-    else:
-        ref = ref.replace("{name}", name)
-        ref = ref.replace("{summary}", summary)
-        ref = ref.replace("{quote}", quote)
+    # 从 STAGE_REFS 获取引导语
+    ref = STAGE_REFS.get(stage, "请继续。")
+    # 替换变量
+    ref = ref.replace("{name}", name)
+    ref = ref.replace("{summary}", summary)
+    ref = ref.replace("{quote}", quote)
 
     return ref
 
@@ -953,6 +922,9 @@ def init_session_state():
     if "portrait_adjusting" not in st.session_state:
         st.session_state.portrait_adjusting = False
 
+    if "portrait_adjust_mode" not in st.session_state:
+        st.session_state.portrait_adjust_mode = False
+
     if "portrait_adjustment_input" not in st.session_state:
         st.session_state.portrait_adjustment_input = ""
 
@@ -1157,8 +1129,9 @@ def render_portrait_ui():
                           version=st.session_state.portrait_current_version,
                           final_path=st.session_state.portrait_final)
 
-                st.session_state.stage_index = STAGES.index("S0d")
-                msg = generate_guide_message("S0d", {"name": st.session_state.character_name})
+                # 直接进入 A1a 学业故事
+                st.session_state.stage_index = STAGES.index("A1a")
+                msg = generate_guide_message("A1a", {"name": st.session_state.character_name})
                 st.session_state.messages.append({
                     "role": "assistant",
                     "content": msg
@@ -1167,12 +1140,60 @@ def render_portrait_ui():
                 st.rerun()
 
         with col2:
-            if st.button("✎ 重新生成"):
+            if st.button("✎ 调整修改"):
+                # 进入调整模式
+                st.session_state.portrait_adjust_mode = True
+                st.rerun()
+
+    # 调整修改模式
+    if st.session_state.get("portrait_adjust_mode", False):
+        st.markdown("### 请描述需要调整的地方")
+        st.markdown("比如：眼睛再大一些、头发换成短发、表情更严肃等")
+
+        adjustment_input = st.text_area(
+            "调整要求",
+            value=st.session_state.get("portrait_adjust_input", ""),
+            placeholder="描述你需要调整的地方...",
+            key="portrait_adjust_input_area"
+        )
+
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            if st.button("✓ 确认调整", type="primary"):
+                if adjustment_input.strip():
+                    # 保存调整要求
+                    st.session_state.portrait_adjust_input = adjustment_input
+
+                    # 构建新的外貌描述 = 原描述 + 调整
+                    original_appearance = st.session_state.character_appearance
+                    new_appearance = f"{original_appearance}。调整要求：{adjustment_input}"
+                    st.session_state.character_appearance = new_appearance
+
+                    # 准备重新生成
+                    st.session_state.portrait_adjust_mode = False
+                    st.session_state.portrait_adjusting = True
+                    st.session_state.portrait_generating = True
+                    st.session_state.portrait_generated = False
+
+                    msg = f"好的，我会根据你的要求调整：{adjustment_input}。正在重新生成，请稍候..."
+                    st.session_state.messages.append({
+                        "role": "assistant",
+                        "content": msg
+                    })
+                    save_session()
+                    st.rerun()
+
+        with col2:
+            if st.button("取消"):
+                st.session_state.portrait_adjust_mode = False
+                st.rerun()
+
+        with col3:
+            if st.button("重新选择风格"):
+                st.session_state.portrait_adjust_mode = False
                 st.session_state.portrait_style = ""
-                st.session_state.portrait_generating = False
                 st.session_state.portrait_generated = False
                 st.session_state.portrait_path = ""
-
                 msg = "好的，我们重新生成。你想用什么风格？比如：写实、动漫、水彩、素描、油画、国风等。"
                 st.session_state.messages.append({
                     "role": "assistant",
