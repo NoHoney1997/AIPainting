@@ -166,7 +166,7 @@ def generate_portrait(description: str, session_id: str, style: str = "写实", 
 外貌特征：
 {description}
 
-要求：全身像，三视图（正面，侧面，背面），不凸显身材，人物居中，背景简洁"""
+要求：全身像，不凸显身材，人物居中，背景简洁"""
 
     for attempt in range(3):
         try:

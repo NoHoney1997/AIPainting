@@ -150,7 +150,7 @@ STAGE_REFS = {
     "B1d": "这件事之后对{name}有什么影响？心情、作息、和他人相处有什么变化？",
     "B2a": "故事很具体了。现在来揣摩角色的内心——这件事发生时，{name}心里最先冒出来的那句话是什么？",
     "B2b": "{name}的这个反应——更像TA自己的声音，还是像某个重要的人可能对TA说的话？TA会觉得只有自己才会这样，还是谁都可能遇到？",
-    "B2c": "在{name}看来，这个困难说明了什么？",
+    "B2c": "在{name}看来，这个困难说明了什么？一次偶然——还是暴露了TA一直以来的问题？TA是被这感觉困住，还是能意识到'我正在经历困难'？",
     "B3a": "刚才描述了{name}遇到的{summary}。现在挑3到5个关键瞬间来生成连环画。",
     "B3b": "正在生成连环画...",
     "B3c": "人际故事的连环画也完成了。接下来我们来做一个小小的编剧练习。",
@@ -2022,25 +2022,47 @@ def render_done_ui():
 
     st.markdown("""
     你成功创作了一个虚构角色的故事，并亲身体验了编剧视角转换的练习。
-    
+
     在旁观视角和沉浸视角之间切换，是创作者常用的技巧。
     它帮助我们理解角色的内在世界，同时保持一定的距离来审视故事。
-    
-    ---
-    
-    **你的角色**: {name}
-    
-    **学业故事**: {a_summary}
-    
-    **人际故事**: {b_summary}
-    """.format(
-        name=st.session_state.character_name,
-        a_summary=st.session_state.stage_A_material.get("dilemma", "未填写")[:100] + "...",
-        b_summary=st.session_state.stage_B_material.get("dilemma", "未填写")[:100] + "..."
-    ))
+    """)
+
+    # 显示角色画像
+    st.markdown("---")
+    st.markdown("### 角色画像")
 
     if st.session_state.portrait_final and os.path.exists(st.session_state.portrait_final):
-        st.image(st.session_state.portrait_final, width=300, caption="最终角色画像")
+        st.image(st.session_state.portrait_final, width=300, caption=f"{st.session_state.character_name}")
+    else:
+        st.info("尚未生成角色画像")
+
+    # 显示两个故事的连环画
+    st.markdown("---")
+    st.markdown("### 故事连环画")
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+        st.markdown("**学业故事**")
+        frames_a = st.session_state.stage_A_comic.get("frames", [])
+        if frames_a:
+            for i, frame in enumerate(frames_a):
+                final_path = frame.get("final_path") or frame.get("image_path")
+                if final_path and os.path.exists(final_path):
+                    st.image(final_path, width=280, caption=f"第{i+1}格")
+        else:
+            st.info("尚未生成学业故事连环画")
+
+    with col2:
+        st.markdown("**人际故事**")
+        frames_b = st.session_state.stage_B_comic.get("frames", [])
+        if frames_b:
+            for i, frame in enumerate(frames_b):
+                final_path = frame.get("final_path") or frame.get("image_path")
+                if final_path and os.path.exists(final_path):
+                    st.image(final_path, width=280, caption=f"第{i+1}格")
+        else:
+            st.info("尚未生成人际故事连环画")
 
     st.markdown("---")
     st.markdown("感谢你的时间和创意！如有需要可以重新开始。")
