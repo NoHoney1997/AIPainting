@@ -1648,12 +1648,6 @@ def _render_comic_generation_view():
     # 确保所有分镜都有记录
     _ensure_frame_records()
     
-    # 检查是否全部完成
-    all_confirmed = all(f.get("final_path") for f in comic_data.get("frames", [])) and len(comic_data["frames"]) > 0
-    if all_confirmed:
-        _render_comic_complete_view()
-        return
-    
     # 每行1个分镜
     for frame_num in range(1, total_frames + 1):
         frame_record = next(
@@ -1664,18 +1658,23 @@ def _render_comic_generation_view():
             _render_comic_frame_row(frame_num, frame_record, frames_parsed, situation)
         st.markdown("---")
     
-    # 底部工具栏：增减格按钮
-    col_add, col_del = st.columns(2)
-    with col_add:
+    # 统计完成情况
+    confirmed_count = len([f for f in comic_data.get("frames", []) if f.get("final_path")])
+    generated_count = len([f for f in comic_data.get("frames", []) if f.get("image_path")])
+    
+    st.markdown(f"**进度：{confirmed_count}/{total_frames} 格已确认，{generated_count}/{total_frames} 格已生成**")
+    
+    # 底部工具栏
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
         if st.button("➕ 增加一格", use_container_width=True):
-            # 添加新分镜
             new_frame = {
                 "description": "",
                 "frame_number": total_frames + 1
             }
             frames_parsed.append(new_frame)
             
-            # 添加新的 frame_record
             frame_record = {
                 "frame_index": total_frames + 1,
                 "description": "",
@@ -1689,22 +1688,53 @@ def _render_comic_generation_view():
             save_session()
             st.rerun()
     
-    with col_del:
+    with col2:
         if total_frames > 1:
             if st.button("➖ 删除最后一格", use_container_width=True):
-                # 删除最后一个分镜
                 frames_parsed.pop()
                 comic_data["frames"] = [
                     f for f in comic_data["frames"] 
                     if f.get("frame_index") != total_frames
                 ]
-                # 重新编号
                 for i, f in enumerate(comic_data["frames"]):
                     f["frame_index"] = i + 1
                 save_session()
                 st.rerun()
         else:
             st.button("➖ 删除最后一格", disabled=True, use_container_width=True)
+    
+    with col3:
+        if st.button("✓ 完成连环画", type="primary", use_container_width=True):
+            # 确认所有已生成的图片
+            for f in comic_data.get("frames", []):
+                if f.get("image_path") and not f.get("final_path"):
+                    f["final_version"] = f.get("current_version", 1)
+                    f["final_path"] = f.get("image_path", "")
+            
+            comic_data["confirmed"] = True
+            log_event("comic_complete",
+                      situation=situation,
+                      frame_count=len(comic_data["frames"]))
+            
+            if situation == "A":
+                st.session_state.stage_index = STAGES.index("A3c")
+                msg = generate_guide_message("A3c", {"name": st.session_state.character_name})
+            else:
+                st.session_state.stage_index = STAGES.index("P4A_REWRITE")
+                msg = generate_guide_message("P4A_REWRITE", {
+                    "name": st.session_state.character_name,
+                    "quote": st.session_state.stage_A2a_quote
+                })
+                st.session_state.stage4_mode = True
+                st.session_state.stage4_situation = "A"
+                st.session_state.stage4_start_time = time.time()
+            
+            st.session_state.messages.append({
+                "role": "assistant",
+                "content": msg
+            })
+            save_session()
+            st.rerun()
 
 
 def render_comic_ui():
