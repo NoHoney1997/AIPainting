@@ -1384,22 +1384,21 @@ def _render_comic_frame_row(frame_num, frame_record, frames_parsed, situation):
     has_image = frame_record.get("image_path") and os.path.exists(frame_record["image_path"])
     current_v = frame_record.get("current_version", 0)
     final_v = frame_record.get("final_version", 0)
-    
+
     # 每行布局：左侧(编辑区) | 右侧(图片区)
     col1, col2 = st.columns([1, 1.5])
-    
+
     with col1:
         st.markdown(f"**第{frame_num}格**")
-        # 文本输入框用于编辑描述
+        # 文本输入框用于编辑描述（必填）
         new_desc = st.text_area(
-            "描述",
+            "描述（必填）",
             value=description,
             key=f"desc_{frame_num}",
-            height=100,
-            label_visibility="collapsed",
-            placeholder="输入分镜描述..."
+            height=300,
+            placeholder="请描述这一格画面的人物、动作、表情、环境等..."
         )
-        
+
         # 如果描述有变化，更新数据
         if new_desc != description:
             # 更新 frames_parsed
@@ -1408,7 +1407,7 @@ def _render_comic_frame_row(frame_num, frame_record, frames_parsed, situation):
             # 更新 comic_data 中的 frame_record
             frame_record["description"] = new_desc
             save_session()
-        
+
         # 操作按钮行
         col_gen, col_retry, col_confirm = st.columns(3)
         with col_gen:
@@ -1425,20 +1424,26 @@ def _render_comic_frame_row(frame_num, frame_record, frames_parsed, situation):
                     if success:
                         st.rerun()
         with col_confirm:
+            # 获取最新描述
+            current_desc = st.session_state.get(f"desc_{frame_num}", description)
             if has_image and len(versions) > 0:
                 if len(versions) == 1:
-                    if st.button("✓ 确认", key=f"confirm_single_{frame_num}", use_container_width=True):
-                        frame_record["final_version"] = current_v
-                        frame_record["final_path"] = _copy_frame_to_final(
-                            frame_record["image_path"], situation, frame_num
-                        )
-                        log_event("comic_frame_confirmed",
-                                  situation=situation,
-                                  frame=frame_num,
-                                  version=current_v,
-                                  final_path=frame_record["final_path"])
-                        save_session()
-                        st.rerun()
+                    if current_desc and len(current_desc.strip()) > 0:
+                        if st.button("✓ 确认", key=f"confirm_single_{frame_num}", use_container_width=True):
+                            frame_record["final_version"] = current_v
+                            frame_record["final_path"] = _copy_frame_to_final(
+                                frame_record["image_path"], situation, frame_num
+                            )
+                            log_event("comic_frame_confirmed",
+                                      situation=situation,
+                                      frame=frame_num,
+                                      version=current_v,
+                                      final_path=frame_record["final_path"])
+                            save_session()
+                            st.rerun()
+                    else:
+                        st.button("✓ 确认", disabled=True, use_container_width=True)
+                        st.caption("请先填写描述")
                 else:
                     if st.button("✓ 确认", key=f"confirm_multi_{frame_num}", use_container_width=True):
                         st.session_state.comic_selecting_version = frame_num
