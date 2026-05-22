@@ -1500,8 +1500,6 @@ def _render_comic_frame_row(frame_num, frame_record, frames_parsed, situation):
                 st.caption(f"共 {len(versions)} 个版本，点击「确认」选择")
             elif final_v > 0:
                 st.caption("✓ 已确认")
-        else:
-            st.info("点击上方「生成」按钮开始生成")
 
 
 def _render_comic_complete_view():
