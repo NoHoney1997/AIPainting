@@ -154,8 +154,7 @@ STAGE_REFS = {
     "B3a": "刚才描述了{name}遇到的{summary}。现在挑3到5个关键瞬间来生成连环画。",
     "B3b": "正在生成连环画...",
     "B3c": "人际故事的连环画也完成了。接下来我们来做一个小小的编剧练习。",
-    "P4A_REWRITE": "来做编剧的进阶练习——写独白时编剧会试不同视角：旁观视角（第三人称）和沉浸视角（第一人称）。刚才写的是旁观视角，现在试沉浸视角——完全代入{name}，'我'就是TA。回到那个时刻，'我'的内心独白是什么？这是旁观版本：{quote}请用第一人称改写。",
-    "P4A_DIFF": "两个版本有什么不同？为什么会有这些差异？",
+    "P4A_REWRITE": "来做编剧的进阶练习——写独白时编剧会试不同视角：旁观视角（第三人称）和沉浸视角（第一人称）。刚才写的是旁观视角，现在试沉浸视角——完全代入{name}，'我'就是TA。",
     "P4B_REWRITE": "同样的练习——现在试沉浸视角，完全代入{name}，用'我'来写。这是旁观版本：{quote}请用第一人称改写。",
     "P4B_DIFF": "两个版本有什么不同？为什么会有这些差异？",
     "DEBRIEF": "创作完成了！想听听你的感受——整体体验怎么样？有没有哪个瞬间觉得这不只是在创作角色？你觉得背后想探索什么？",
@@ -1842,15 +1841,24 @@ def render_rewrite_ui():
 
     # 直接进入沉浸视角练习
     st.markdown("**沉浸视角（第一人称）**")
-    st.markdown("现在请你完全代入角色，用'我'来写TA的内心独白。回到那个时刻，'我'的内心会说什么？")
+    st.markdown("回到那个时刻，请用「我」来写：")
+
+    # 三个引导问题
+    st.markdown("""
+**1.** 事情发生时，'我'心里最先冒出的那句话是什么？
+
+**2.** 这个反应是'我'自己的声音，还是像某个重要的人会说的话？只有'我'会这样，还是谁都可能遇到？
+
+**3.** 这个困难是偶然，还是一直以来的问题？'我'会被困住吗？
+""")
 
     current_text = st.session_state.get(target_rewrite, "")
     rewrite_text = st.text_area(
-        "用第一人称改写",
+        "在这里写下你的回答...",
         value=current_text,
         height=200,
         key=f"stage4_{situation}_textarea",
-        placeholder="在这里写下角色的内心独白..."
+        placeholder=""
     )
 
     st.session_state[target_rewrite] = rewrite_text
@@ -1898,47 +1906,45 @@ def render_diff_ui():
 
     if situation == "A":
         material = st.session_state.stage_A_material
-        # 优先使用存储的数据，回退到对话历史
+        # 优先使用存储的数据
         original_quote = st.session_state.stage_A2a_quote or material.get("dilemma") or material.get("context") or ""
         reflection = st.session_state.stage_A2b_reflection or material.get("reaction") or ""
         framing = st.session_state.stage_A2c_framing or material.get("impact") or ""
-        # 如果都为空，从对话历史中获取 A2a 阶段的内容
-        if not original_quote:
-            original_quote = _get_stage_content_from_history("A2a")
-        if not reflection:
-            reflection = _get_stage_content_from_history("A2b")
-        if not framing:
-            framing = _get_stage_content_from_history("A2c")
         rewrite_quote = st.session_state.stage4_rewrite_A
         diff_comment_key = "stage4_diff_A"
         story_type = "学业"
+        stage_prefix = "A"
     else:
         material = st.session_state.stage_B_material
         original_quote = st.session_state.stage_B2a_quote or material.get("dilemma") or material.get("context") or ""
         reflection = st.session_state.stage_B2b_reflection or material.get("reaction") or ""
         framing = st.session_state.stage_B2c_framing or material.get("impact") or ""
-        if not original_quote:
-            original_quote = _get_stage_content_from_history("B2a")
-        if not reflection:
-            reflection = _get_stage_content_from_history("B2b")
-        if not framing:
-            framing = _get_stage_content_from_history("B2c")
         rewrite_quote = st.session_state.stage4_rewrite_B
         diff_comment_key = "stage4_diff_B"
         story_type = "人际"
+        stage_prefix = "B"
+
+    # 从对话历史中获取内容（使用situation区分）
+    if not original_quote:
+        original_quote = _get_stage_content_from_history(f"{stage_prefix}2a")
+    if not reflection:
+        reflection = _get_stage_content_from_history(f"{stage_prefix}2b")
+    if not framing:
+        framing = _get_stage_content_from_history(f"{stage_prefix}2c")
 
     st.markdown(f"### 两个版本的对比：{story_type}故事")
 
-    # 显示旁观视角的三个维度
+    # 显示旁观视角的三个维度（用原问题的概括作为标题）
     st.markdown("**旁观视角（第三人称）**")
 
-    st.markdown(f"**内心独白**：{original_quote}")
+    if original_quote:
+        st.markdown(f"**那一刻，TA在想什么**：{original_quote}")
 
     if reflection:
-        st.markdown(f"**声音来源与普遍性**：{reflection}")
+        st.markdown(f"**TA怎么看这件事**：{reflection}")
 
     if framing:
-        st.markdown(f"**对困难的认知**：{framing}")
+        st.markdown(f"**这说明什么**：{framing}")
 
     st.markdown("---")
 
