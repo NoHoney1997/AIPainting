@@ -27,7 +27,7 @@ LLM_BASE_URL = os.getenv("LLM_BASE_URL", "https://dashscope.aliyuncs.com/compati
 # =============================================================================
 # 图像生成模型配置
 # =============================================================================
-IMAGE_GEN_MODEL = os.getenv("IMAGE_GEN_MODEL", "wan2.6-t2i")
+IMAGE_GEN_MODEL = os.getenv("IMAGE_GEN_MODEL", "qwen-image-2.0-pro-2026-03-03")
 
 IMAGE_GEN_API_URL = "https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation"
 
@@ -198,26 +198,28 @@ def generate_comic_frame(
     timestamp = int(time.time())
     output_path = os.path.join(session_images_dir, f"comic_{situation}_{frame_index}_{style}_v{timestamp}.png")
 
-    ref_desc = f"{character_features.get('gender', '')}角色，{character_features.get('hair', '')}发型，{character_features.get('clothing_style', '')}风格"
+    prompt = f"""生成一幅漫画风格的单幅场景画面。
 
-    prompt = f"""请根据以下描述生成漫画分镜画面。
+风格：{style_info["prompt_suffix"]}
 
-要求：
-- {style_info["prompt_suffix"]}
-- 保持角色一致性：{ref_desc}
-- 场景氛围：{situation}
+场景描述：
+{description}
 
-分镜描述：
-{description}"""
+重要要求：
+- 单幅漫画画面，不是三视图
+- 角色形象与参考图片中的形象一致，注意参考的是参考图中的形象，不是人物数量
+- 画面构图完整，有背景环境"""
 
     has_reference = False
 
     for attempt in range(3):
         try:
-            if portrait_path and os.path.exists(portrait_path) and attempt == 0:
+            if portrait_path and os.path.exists(portrait_path):
+                # 使用参考图生成
                 image_url = _call_wanx_t2i_with_ref(prompt, portrait_path)
                 has_reference = True
             else:
+                # 没有参考图时直接生成
                 image_url = _call_wanx_t2i(prompt)
                 has_reference = False
 
