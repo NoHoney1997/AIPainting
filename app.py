@@ -474,6 +474,37 @@ def generate_follow_up(stage: str, conversation_history: List[Dict]) -> str:
 
     return generate_context_aware_follow_up(stage, last_user_msg, context)
 
+def _get_stage_content_from_history(target_stage: str) -> str:
+    """从对话历史中获取指定阶段的用户输入内容"""
+    messages = st.session_state.get("messages", [])
+
+    # 定义阶段关键词映射
+    stage_keywords = {
+        "A2a": ["内心独白", "心里最先冒出来", "第一反应"],
+        "A2b": ["声音来源", "普遍性", "只有自己"],
+        "A2c": ["困难说明了", "偶然", "问题"],
+        "B2a": ["内心独白", "心里最先冒出来", "第一反应"],
+        "B2b": ["声音来源", "普遍性", "只有自己"],
+        "B2c": ["困难说明了", "偶然", "问题"]
+    }
+
+    keywords = stage_keywords.get(target_stage, [])
+    found_target = False
+
+    for i, msg in enumerate(messages):
+        if msg.get("role") == "assistant":
+            content = msg.get("content", "")
+            # 检查是否是目标阶段的引导语
+            for kw in keywords:
+                if kw in content:
+                    found_target = True
+                    break
+        elif msg.get("role") == "user" and found_target:
+            # 返回用户对这个问题的回答
+            return msg.get("content", "")
+
+    return ""
+
 # =============================================================================
 # 数据存储函数
 # =============================================================================
@@ -1781,11 +1812,13 @@ def render_rewrite_ui():
         story_type = "人际"
 
     if situation == "A":
-        original_quote = st.session_state.stage_A2a_quote
+        material = st.session_state.stage_A_material
+        original_quote = st.session_state.stage_A2a_quote or material.get("dilemma") or material.get("context") or "请描述这个关键时刻"
         target_rewrite = "stage4_rewrite_A"
         latency_key = "stage4_latency_A"
     else:
-        original_quote = st.session_state.stage_B2a_quote
+        material = st.session_state.stage_B_material
+        original_quote = st.session_state.stage_B2a_quote or material.get("dilemma") or material.get("context") or "请描述这个关键时刻"
         target_rewrite = "stage4_rewrite_B"
         latency_key = "stage4_latency_B"
 
@@ -1807,11 +1840,7 @@ def render_rewrite_ui():
 
     st.markdown("---")
 
-    # 显示旁观视角的引用
-    st.markdown("**旁观视角（第三人称）**")
-    st.markdown(f"> {original_quote}")
-
-    st.markdown("---")
+    # 直接进入沉浸视角练习
     st.markdown("**沉浸视角（第一人称）**")
     st.markdown("现在请你完全代入角色，用'我'来写TA的内心独白。回到那个时刻，'我'的内心会说什么？")
 
@@ -1868,25 +1897,54 @@ def render_diff_ui():
         situation = "B"
 
     if situation == "A":
-        original_quote = st.session_state.stage_A2a_quote
+        material = st.session_state.stage_A_material
+        # 优先使用存储的数据，回退到对话历史
+        original_quote = st.session_state.stage_A2a_quote or material.get("dilemma") or material.get("context") or ""
+        reflection = st.session_state.stage_A2b_reflection or material.get("reaction") or ""
+        framing = st.session_state.stage_A2c_framing or material.get("impact") or ""
+        # 如果都为空，从对话历史中获取 A2a 阶段的内容
+        if not original_quote:
+            original_quote = _get_stage_content_from_history("A2a")
+        if not reflection:
+            reflection = _get_stage_content_from_history("A2b")
+        if not framing:
+            framing = _get_stage_content_from_history("A2c")
         rewrite_quote = st.session_state.stage4_rewrite_A
         diff_comment_key = "stage4_diff_A"
+        story_type = "学业"
     else:
-        original_quote = st.session_state.stage_B2a_quote
+        material = st.session_state.stage_B_material
+        original_quote = st.session_state.stage_B2a_quote or material.get("dilemma") or material.get("context") or ""
+        reflection = st.session_state.stage_B2b_reflection or material.get("reaction") or ""
+        framing = st.session_state.stage_B2c_framing or material.get("impact") or ""
+        if not original_quote:
+            original_quote = _get_stage_content_from_history("B2a")
+        if not reflection:
+            reflection = _get_stage_content_from_history("B2b")
+        if not framing:
+            framing = _get_stage_content_from_history("B2c")
         rewrite_quote = st.session_state.stage4_rewrite_B
         diff_comment_key = "stage4_diff_B"
+        story_type = "人际"
 
-    st.markdown("### 两个版本的对比")
+    st.markdown(f"### 两个版本的对比：{story_type}故事")
 
-    col1, col2 = st.columns(2)
+    # 显示旁观视角的三个维度
+    st.markdown("**旁观视角（第三人称）**")
 
-    with col1:
-        st.markdown("**旁观视角（第三人称）**")
-        st.markdown(f"> {original_quote}")
+    st.markdown(f"**内心独白**：{original_quote}")
 
-    with col2:
-        st.markdown("**沉浸视角（第一人称）**")
-        st.markdown(f"> {rewrite_quote}")
+    if reflection:
+        st.markdown(f"**声音来源与普遍性**：{reflection}")
+
+    if framing:
+        st.markdown(f"**对困难的认知**：{framing}")
+
+    st.markdown("---")
+
+    # 显示沉浸视角
+    st.markdown("**沉浸视角（第一人称）**")
+    st.markdown(f"> {rewrite_quote}")
 
     st.markdown("---")
     st.markdown("**你觉得两个版本有什么不同？为什么会有这些差异？**")
@@ -2122,8 +2180,15 @@ def main():
         st.markdown(f"### 🎬 {story_type}故事连环画生成")
         st.markdown("请为每个分镜输入描述，然后点击「生成」按钮")
         
-        # 初始化分镜数据
-        if not st.session_state.comic_frames_parsed or len(st.session_state.comic_frames_parsed) == 0:
+        # 检查是否需要重新初始化（根据 situation 区分）
+        current_comic = st.session_state.stage_A_comic if situation == "A" else st.session_state.stage_B_comic
+        need_init = (
+            st.session_state.comic_frames_parsed is None or 
+            len(st.session_state.comic_frames_parsed) == 0 or
+            st.session_state.comic_situation != situation
+        )
+        
+        if need_init:
             # 默认3个空分镜
             default_frames = [
                 {"description": "", "frame_number": 1},
