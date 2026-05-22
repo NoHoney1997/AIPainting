@@ -1772,6 +1772,14 @@ def render_rewrite_ui():
     if st.session_state.stage4_start_time == 0:
         st.session_state.stage4_start_time = time.time()
 
+    # 获取对应的连环画数据
+    if situation == "A":
+        comic_data = st.session_state.stage_A_comic
+        story_type = "学业"
+    else:
+        comic_data = st.session_state.stage_B_comic
+        story_type = "人际"
+
     if situation == "A":
         original_quote = st.session_state.stage_A2a_quote
         target_rewrite = "stage4_rewrite_A"
@@ -1781,8 +1789,25 @@ def render_rewrite_ui():
         target_rewrite = "stage4_rewrite_B"
         latency_key = "stage4_latency_B"
 
-    st.markdown("### 编剧练习：视角转换")
+    st.markdown(f"### 编剧练习：{story_type}故事视角转换")
 
+    # 显示连环画引导回忆
+    st.markdown(f"请回忆刚才创作的 **{story_type}故事连环画** 中的关键时刻：")
+    
+    frames = comic_data.get("frames", [])
+    if frames:
+        # 显示连环画预览
+        cols = st.columns(min(len(frames), 5))
+        for i, frame in enumerate(frames):
+            with cols[i % len(cols)]:
+                final_path = frame.get("final_path") or frame.get("image_path")
+                if final_path and os.path.exists(final_path):
+                    st.image(final_path, width=150)
+                    st.caption(f"第{i+1}格")
+
+    st.markdown("---")
+
+    # 显示旁观视角的引用
     st.markdown("**旁观视角（第三人称）**")
     st.markdown(f"> {original_quote}")
 
