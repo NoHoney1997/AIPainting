@@ -119,7 +119,7 @@ STAGE_GOALS = {
 STAGE_REFS = {
     "S0a": "今天一起创作一个角色——先认识一下TA。请构思一个虚构的大学生，TA叫什么？性别是？是学什么专业的？哪个年级？",
     "S0b": "让{name}更具体——TA长什么样？发型、脸型、眉眼、身材、穿衣风格？整体气质偏活泼还是沉静？",
-    "S0c": "好的，{name}的形象很清晰了。接下来我来生成TA的三视图画像。你想用什么风格？比如：写实、动漫、水彩、素描、油画、国风，或者你喜欢的其他风格都可以告诉我。",
+    "S0c": "好的，{name}的形象很清晰了。接下来我来生成TA的画像。你想用什么风格？比如：写实、动漫、水彩、素描、油画、国风，或者你喜欢的其他风格都可以告诉我。",
     "S0d": "这就是{name}了——看起来是个有故事的年轻人。接下来我们一起来探索TA的某个故事。",
     "A1a": "大学里都会遇到各种学业状况——{name}在学业方面有没有什么让TA感到困扰或沮丧的事？可以是某次具体的事情，也可以是TA一直以来的某种处境或状态。",
     "A1b": "能再说具体一点吗？",
@@ -128,7 +128,7 @@ STAGE_REFS = {
     "A2a": "故事很具体了。好的创作还要揣摩角色的内心——这件事发生时，{name}心里最先冒出来的那句话是什么？最直觉的第一反应。原汁原味写下来，包括语气和用词。",
     "A2b": "{name}的这个反应——更像TA自己的声音，还是像某个重要的人可能对TA说的话？TA会觉得只有自己才会这样，还是谁都可能遇到？",
     "A2c": "在{name}看来，这个困难说明了什么？一次偶然——还是暴露了TA一直以来的问题？TA是被这感觉困住，还是能意识到'我正在经历困难'？",
-    "A3a": "刚才描述了{name}遇到的{summary}。现在用AI生成连环画。挑3到5个关键瞬间，每格描述{name}的状态和感受。不用画结局。",
+    "A3a": "刚才描述了{name}的故事。现在用AI生成连环画。挑3到5个关键瞬间，每格描述具体的场景、{name}的状态和感受。",
     "A3b": "正在生成连环画...",
     "A3c": "学业故事的连环画完成了。接下来我们来探索{name}在人际关系方面的故事。",
     "B1a": "除了学业，大学里人际关系也很重要——{name}在人际方面有没有什么困扰？不管是某次具体事件，还是一直以来让TA不太舒服的状态或处境。",
@@ -138,7 +138,7 @@ STAGE_REFS = {
     "B2a": "故事很具体了。现在来揣摩角色的内心——这件事发生时，{name}心里最先冒出来的那句话是什么？",
     "B2b": "{name}的这个反应——更像TA自己的声音，还是像某个重要的人可能对TA说的话？TA会觉得只有自己才会这样，还是谁都可能遇到？",
     "B2c": "在{name}看来，这个困难说明了什么？一次偶然——还是暴露了TA一直以来的问题？TA是被这感觉困住，还是能意识到'我正在经历困难'？",
-    "B3a": "刚才描述了{name}遇到的{summary}。现在挑3到5个关键瞬间来生成连环画。",
+    "B3a": "刚才描述了{name}的故事。现在挑3到5个关键瞬间来生成连环画，每格描述具体的场景、{name}的状态和感受。",
     "B3b": "正在生成连环画...",
     "B3c": "人际故事的连环画也完成了。接下来我们来做一个小小的编剧练习。",
     "P4A_REWRITE": "来做编剧的进阶练习——写独白时编剧会试不同视角：旁观视角（第三人称）和沉浸视角（第一人称）。刚才写的是旁观视角，现在试沉浸视角——完全代入{name}，'我'就是TA。",
@@ -450,6 +450,8 @@ def _init_comic_frames():
     else:
         st.session_state.stage_B_comic = comic_data
     st.session_state.comic_situation = situation
+    # 使用用户选择的画像风格作为连环画风格
+    st.session_state.comic_style = st.session_state.get("portrait_style", "动漫")
 
 
 def legacy_stage_to_context_target(stage: str):
@@ -954,29 +956,49 @@ def _get_stage_content_from_history(target_stage: str) -> str:
     """从对话历史中获取指定阶段的用户输入内容"""
     messages = st.session_state.get("messages", [])
 
-    # 定义阶段关键词映射
-    stage_keywords = {
-        "A2a": ["内心独白", "心里最先冒出来", "第一反应"],
-        "A2b": ["声音来源", "普遍性", "只有自己"],
-        "A2c": ["困难说明了", "偶然", "问题"],
-        "B2a": ["内心独白", "心里最先冒出来", "第一反应"],
-        "B2b": ["声音来源", "普遍性", "只有自己"],
-        "B2c": ["困难说明了", "偶然", "问题"]
-    }
+    # 利用对话顺序和关键词区分 A/B 系列
+    # A系列先出现，B系列后出现
+    a_series_done = False
+    found_count = 0
 
-    keywords = stage_keywords.get(target_stage, [])
-    found_target = False
-
-    for i, msg in enumerate(messages):
+    for msg in messages:
         if msg.get("role") == "assistant":
             content = msg.get("content", "")
-            # 检查是否是目标阶段的引导语
-            for kw in keywords:
-                if kw in content:
-                    found_target = True
-                    break
-        elif msg.get("role") == "user" and found_target:
-            # 返回用户对这个问题的回答
+
+            # 检测 A2a/B2a：内心独白问题
+            if target_stage in ["A2a", "B2a"]:
+                # A2a: 包含"好的创作"+"揣摩"+"第一反应"
+                # B2a: 包含"来揣摩"+"心里"+"最先冒出"
+                if not a_series_done:
+                    if "好的创作" in content and "揣摩" in content and "第一反应" in content:
+                        a_series_done = True
+                        if target_stage == "A2a":
+                            found_count = 1
+                else:
+                    if "来揣摩" in content and "心里" in content and ("最先冒出" in content or "第一反应" in content):
+                        if target_stage == "B2a":
+                            found_count = 1
+
+            # 检测 A2b/B2b：声音来源问题
+            elif target_stage in ["A2b", "B2b"]:
+                if "声音来源" in content:
+                    # A系列的声音来源在B系列之前
+                    if target_stage == "A2b" and not a_series_done:
+                        found_count = 1
+                    elif target_stage == "B2b" and a_series_done:
+                        found_count = 1
+
+            # 检测 A2c/B2c：困难认知问题
+            elif target_stage in ["A2c", "B2c"]:
+                if "困难说明了" in content:
+                    if target_stage == "A2c" and not a_series_done:
+                        found_count = 1
+                    elif target_stage == "B2c" and a_series_done:
+                        found_count = 1
+
+        elif msg.get("role") == "user" and found_count == 1:
+            # 找到目标阶段的下一个用户回复
+            found_count = 2
             return msg.get("content", "")
 
     return ""
@@ -993,8 +1015,10 @@ def store_data(stage: str, user_input: str):
     }
 
     extracted = parse_user_input_with_llm(stage, user_input, context)
-    if not extracted:
-        return
+
+    # 如果 LLM 解析失败，使用原始输入作为回退
+    if not extracted or all(v == "" for v in extracted.values()):
+        extracted = {"_raw": user_input}
 
     if stage == "S0a":
         if extracted.get("name"):
@@ -1010,38 +1034,38 @@ def store_data(stage: str, user_input: str):
         st.session_state.character_appearance = extracted["appearance"]
 
     elif stage == "A1a":
-        st.session_state.stage_A_material["dilemma"] = extracted.get("dilemma", user_input)
+        st.session_state.stage_A_material["dilemma"] = extracted.get("dilemma") or extracted.get("_raw") or user_input
     elif stage == "A1b":
-        st.session_state.stage_A_material["context"] = extracted.get("context", user_input)
+        st.session_state.stage_A_material["context"] = extracted.get("context") or extracted.get("_raw") or user_input
     elif stage == "A1c":
-        st.session_state.stage_A_material["reaction"] = extracted.get("reaction", user_input)
+        st.session_state.stage_A_material["reaction"] = extracted.get("reaction") or extracted.get("_raw") or user_input
     elif stage == "A1d":
-        st.session_state.stage_A_material["impact"] = extracted.get("impact", user_input)
+        st.session_state.stage_A_material["impact"] = extracted.get("impact") or extracted.get("_raw") or user_input
     elif stage == "A2a":
-        st.session_state.stage_A2a_quote = extracted.get("quote", user_input)
+        st.session_state.stage_A2a_quote = extracted.get("quote") or extracted.get("_raw") or user_input
         st.session_state.stage_A_quote_timestamp = time.time()
     elif stage == "A2b":
-        st.session_state.stage_A2b_reflection = extracted.get("reflection", user_input)
+        st.session_state.stage_A2b_reflection = extracted.get("reflection") or extracted.get("_raw") or user_input
     elif stage == "A2c":
-        st.session_state.stage_A2c_framing = extracted.get("framing", user_input)
+        st.session_state.stage_A2c_framing = extracted.get("framing") or extracted.get("_raw") or user_input
 
     elif stage == "B1a":
-        st.session_state.stage_B_material["dilemma"] = extracted.get("dilemma", user_input)
+        st.session_state.stage_B_material["dilemma"] = extracted.get("dilemma") or extracted.get("_raw") or user_input
     elif stage == "B1b":
-        st.session_state.stage_B_material["context"] = extracted.get("context", user_input)
+        st.session_state.stage_B_material["context"] = extracted.get("context") or extracted.get("_raw") or user_input
     elif stage == "B1c":
-        st.session_state.stage_B_material["reaction"] = extracted.get("reaction", user_input)
+        st.session_state.stage_B_material["reaction"] = extracted.get("reaction") or extracted.get("_raw") or user_input
     elif stage == "B1d":
-        st.session_state.stage_B_material["impact"] = extracted.get("impact", user_input)
+        st.session_state.stage_B_material["impact"] = extracted.get("impact") or extracted.get("_raw") or user_input
     elif stage == "B2a":
-        st.session_state.stage_B2a_quote = extracted.get("quote", user_input)
+        st.session_state.stage_B2a_quote = extracted.get("quote") or extracted.get("_raw") or user_input
         st.session_state.stage_B_quote_timestamp = time.time()
     elif stage == "B2b":
-        st.session_state.stage_B2b_reflection = extracted.get("reflection", user_input)
+        st.session_state.stage_B2b_reflection = extracted.get("reflection") or extracted.get("_raw") or user_input
     elif stage == "B2c":
-        st.session_state.stage_B2c_framing = extracted.get("framing", user_input)
+        st.session_state.stage_B2c_framing = extracted.get("framing") or extracted.get("_raw") or user_input
     elif stage == "DEBRIEF":
-        st.session_state.debrief_response = extracted.get("response", user_input)
+        st.session_state.debrief_response = extracted.get("response") or extracted.get("_raw") or user_input
 
 def log_event(event_type: str, **data):
     """记录事件到日志"""
@@ -1088,6 +1112,7 @@ def save_session():
         "stage_A2b_reflection": st.session_state.get("stage_A2b_reflection", ""),
         "stage_A2c_framing": st.session_state.get("stage_A2c_framing", ""),
         "stage_A_comic": st.session_state.get("stage_A_comic", {}),
+        "comic_style": st.session_state.get("comic_style", st.session_state.get("portrait_style", "动漫")),
         "stage_B_material": st.session_state.get("stage_B_material", {}),
         "stage_B2a_quote": st.session_state.get("stage_B2a_quote", ""),
         "stage_B2b_reflection": st.session_state.get("stage_B2b_reflection", ""),
@@ -1293,6 +1318,7 @@ def load_session_to_state(session_id: str):
     st.session_state.stage_A2b_reflection = session_data.get("stage_A2b_reflection", "")
     st.session_state.stage_A2c_framing = session_data.get("stage_A2c_framing", "")
     st.session_state.stage_A_comic = session_data.get("stage_A_comic", {})
+    st.session_state.comic_style = session_data.get("comic_style", st.session_state.portrait_style or "动漫")
 
     st.session_state.stage_B_material = session_data.get("stage_B_material", {})
     st.session_state.stage_B2a_quote = session_data.get("stage_B2a_quote", "")
@@ -1608,15 +1634,17 @@ def render_sidebar():
             completed_count = academic_completed + social_completed + (1 if perspective_done else 0)
             overall_pct = completed_count / total_targets if total_targets else 0
 
-            st.markdown("**进度**")
-            st.progress(overall_pct)
-            st.caption(f"{completed_count}/{total_targets} · {int(overall_pct * 100)}%")
-
             academic_done = academic_completed >= len(academic_targets)
             social_done = social_completed >= len(social_targets)
-            st.markdown(f"{'✅' if academic_done else '⏳'} 学业故事 ({academic_completed}/{len(academic_targets)})")
-            st.markdown(f"{'✅' if social_done else '⏳'} 人际故事 ({social_completed}/{len(social_targets)})")
-            st.markdown(f"{'✅' if perspective_done else '⏳'} 视角练习")
+            st.markdown("**当前阶段**")
+            if academic_done and social_done and perspective_done:
+                st.markdown("✅ 全部完成")
+            elif academic_done and social_done:
+                st.markdown("⏳ 视角练习中")
+            elif academic_done:
+                st.markdown("⏳ 人际故事中")
+            else:
+                st.markdown("⏳ 学业故事中")
 
         st.markdown("---")
 
@@ -2586,6 +2614,7 @@ def render_diff_ui():
         stage_prefix = "A"
     else:
         material = st.session_state.stage_B_material
+        # 优先使用存储的数据，确保读取正确的故事数据
         original_quote = st.session_state.stage_B2a_quote or material.get("dilemma") or material.get("context") or ""
         reflection = st.session_state.stage_B2b_reflection or material.get("reaction") or ""
         framing = st.session_state.stage_B2c_framing or material.get("impact") or ""
