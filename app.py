@@ -128,7 +128,7 @@ STAGE_REFS = {
     "A2a": "故事很具体了。好的创作还要揣摩角色的内心——这件事发生时，{name}心里最先冒出来的那句话是什么？最直觉的第一反应。原汁原味写下来，包括语气和用词。",
     "A2b": "{name}的这个反应——更像TA自己的声音，还是像某个重要的人可能对TA说的话？TA会觉得只有自己才会这样，还是谁都可能遇到？",
     "A2c": "在{name}看来，这个困难说明了什么？一次偶然——还是暴露了TA一直以来的问题？TA是被这感觉困住，还是能意识到'我正在经历困难'？",
-    "A3a": "刚才描述了{name}的故事。现在用AI生成连环画。挑3到5个关键瞬间，每格描述具体的场景、{name}的状态和感受。",
+    "A3a": "刚才描述了{name}的故事。现在用AI生成连环画。挑3个及以上的关键瞬间，每格描述具体的场景、{name}的状态和感受。",
     "A3b": "正在生成连环画...",
     "A3c": "学业故事的连环画完成了。接下来我们来探索{name}在人际关系方面的故事。",
     "B1a": "除了学业，大学里人际关系也很重要——{name}在人际方面有没有什么困扰？不管是某次具体事件，还是一直以来让TA不太舒服的状态或处境。",
@@ -141,8 +141,8 @@ STAGE_REFS = {
     "B3a": "刚才描述了{name}的故事。现在挑3到5个关键瞬间来生成连环画，每格描述具体的场景、{name}的状态和感受。",
     "B3b": "正在生成连环画...",
     "B3c": "人际故事的连环画也完成了。接下来我们来做一个小小的编剧练习。",
-    "P4A_REWRITE": "来做编剧的进阶练习——写独白时编剧会试不同视角：旁观视角（第三人称）和沉浸视角（第一人称）。刚才写的是旁观视角，现在试沉浸视角——完全代入{name}，'我'就是TA。",
-    "P4B_REWRITE": "同样的练习——现在试沉浸视角，完全代入{name}，用'我'来写。这是旁观版本：{quote}请用第一人称改写。",
+    "P4A_REWRITE": "来做编剧的进阶练习——写独白时编剧会试不同视角：旁观视角（第三人称）和沉浸视角（第一人称）。刚才写的是旁观视角，现在试沉浸视角——完全代入{name}，假如你就是{name}。",
+    "P4B_REWRITE": "同样的练习——现在试沉浸视角，完全代入{name}，用'我'来写。这是旁观版本：{quote}，假如你就是{name}，请代入改写。",
     "P4B_DIFF": "两个版本有什么不同？为什么会有这些差异？",
     "DEBRIEF": "创作完成了！想听听你的感受——整体体验怎么样？有没有哪个瞬间觉得这不只是在创作角色？你觉得背后想探索什么？",
     "DONE": "感谢你的参与和创作！"
@@ -197,7 +197,7 @@ TARGET_SUFFICIENCY_CRITERIA = {
     "self_kindness": "用户给出了角色内心第一反应的原话或贴近原话的转述，带语气、用词自然；需体现内心声音，不能只有「很难过」「很焦虑」等概括。",
     "common_humanity": "用户对声音来源（更像自己还是像重要他人）或普遍性（是否觉得只有自己会这样）至少有一点具体判断。",
     "mindfulness": "用户对困难的意义有立场：偶然/长期、被困住还是能意识到正在经历困难等，而非空泛的「不知道」。",
-    "comic_frames": "用户提供了至少2个可画成画面的瞬间描述，含人物状态或感受。",
+    "comic_frames": "用户提供了至少3个可画成画面的瞬间描述，含人物状态或感受。",
     "comic_confirmed": "用户明确表示确认或满意。",
 }
 
@@ -2414,7 +2414,7 @@ def _render_comic_generation_view():
             st.rerun()
     
     with col2:
-        if total_frames > 1:
+        if total_frames > 3:
             if st.button("➖ 删除最后一格", use_container_width=True):
                 frames_parsed.pop()
                 comic_data["frames"] = [
@@ -2427,9 +2427,11 @@ def _render_comic_generation_view():
                 st.rerun()
         else:
             st.button("➖ 删除最后一格", disabled=True, use_container_width=True)
+            st.caption("每个情境至少保留3格")
     
     with col3:
-        if st.button("✓ 完成连环画", type="primary", use_container_width=True):
+        can_finish = total_frames >= 3
+        if st.button("✓ 完成连环画", type="primary", use_container_width=True, disabled=not can_finish):
             # 确认所有已生成的图片
             for f in comic_data.get("frames", []):
                 if f.get("image_path") and not f.get("final_path"):
@@ -2464,6 +2466,8 @@ def _render_comic_generation_view():
                 })
                 save_session()
                 st.rerun()
+        if not can_finish:
+            st.caption("每个情境至少需要3格连环画")
 
 
 def render_comic_ui():
