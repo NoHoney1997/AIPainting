@@ -25,11 +25,38 @@ ensure_dir = lambda path: os.makedirs(path, exist_ok=True)
 # 确保目录存在
 ensure_dir(DATA_DIR)
 
-def get_session_dir(session_id: str = None) -> str:
-    """获取会话目录路径"""
+def build_session_folder_name(start_time: Optional[str] = None) -> str:
+    """根据会话开始时间生成目录名"""
+    raw_time = start_time or datetime.now().isoformat()
+    try:
+        dt = datetime.fromisoformat(raw_time)
+    except ValueError:
+        dt = datetime.now()
+    return dt.strftime("%Y%m%d_%H%M%S")
+
+
+def get_session_storage_name(session_id: Optional[str] = None) -> str:
+    """获取当前会话实际使用的存储目录名"""
     if session_id is None:
         session_id = st.session_state.session_id
-    return os.path.join(DATA_DIR, "sessions", session_id)
+
+    session_dirs = st.session_state.get("session_dirs", {})
+    if session_id in session_dirs:
+        return session_dirs[session_id]
+
+    if "start_time" in st.session_state:
+        folder_name = build_session_folder_name(st.session_state.get("start_time"))
+        session_dirs[session_id] = folder_name
+        st.session_state.session_dirs = session_dirs
+        return folder_name
+
+    return session_id
+
+
+def get_session_dir(session_id: str = None) -> str:
+    """获取会话目录路径"""
+    storage_name = get_session_storage_name(session_id)
+    return os.path.join(DATA_DIR, "sessions", storage_name)
 
 def get_images_dir(session_id: str = None) -> str:
     """获取会话图像目录路径"""
@@ -118,7 +145,7 @@ STAGE_GOALS = {
 # 阶段提示参考
 STAGE_REFS = {
     "S0a": "今天一起创作一个角色——先认识一下TA。请构思一个虚构的大学生，TA叫什么？性别是？是学什么专业的？哪个年级？",
-    "S0b": "让{name}更具体——TA长什么样？发型、脸型、眉眼、身材、穿衣风格？整体气质偏活泼还是沉静？",
+    "S0b": "让{name}的形象更具体——TA长什么样？发型、脸型、眉眼、身材、穿衣风格？整体气质偏活泼还是沉静？",
     "S0c": "好的，{name}的形象很清晰了。接下来我来生成TA的画像。你想用什么风格？比如：写实、动漫、水彩、素描、油画、国风，或者你喜欢的其他风格都可以告诉我。",
     "S0d": "这就是{name}了——看起来是个有故事的年轻人。接下来我们一起来探索TA的某个故事。",
     "A1a": "大学里都会遇到各种学业状况——{name}在学业方面有没有什么让TA感到困扰或沮丧的事？可以是某次具体的事情，也可以是TA一直以来的某种处境或状态。",
@@ -1088,6 +1115,7 @@ def save_session():
 
     session_data = {
         "session_id": session_id,
+        "storage_name": get_session_storage_name(session_id),
         "start_time": st.session_state.get("start_time", ""),
         "last_updated": datetime.now().isoformat(),
         "app_phase": get_app_phase(),
@@ -1149,13 +1177,33 @@ def add_message(role: str, content: str):
 
 def load_session(session_id: str) -> Optional[Dict[str, Any]]:
     """加载指定会话的所有数据"""
-    session_file = os.path.join(DATA_DIR, "sessions", session_id, "session.json")
-    if os.path.exists(session_file):
-        try:
-            with open(session_file, "r", encoding="utf-8") as f:
-                return json.load(f)
-        except Exception as e:
-            print(f"加载会话失败: {e}")
+    sessions_dir = os.path.join(DATA_DIR, "sessions")
+    candidate_names = [session_id]
+
+    if os.path.exists(sessions_dir):
+        for folder_name in os.listdir(sessions_dir):
+            session_file = os.path.join(sessions_dir, folder_name, "session.json")
+            if not os.path.exists(session_file):
+                continue
+            try:
+                with open(session_file, "r", encoding="utf-8") as f:
+                    session_data = json.load(f)
+                if session_data.get("session_id") == session_id or folder_name == session_id:
+                    session_data.setdefault("storage_name", folder_name)
+                    return session_data
+            except Exception as e:
+                print(f"加载会话失败: {e}")
+
+    for candidate_name in candidate_names:
+        session_file = os.path.join(sessions_dir, candidate_name, "session.json")
+        if os.path.exists(session_file):
+            try:
+                with open(session_file, "r", encoding="utf-8") as f:
+                    session_data = json.load(f)
+                session_data.setdefault("storage_name", candidate_name)
+                return session_data
+            except Exception as e:
+                print(f"加载会话失败: {e}")
     return None
 
 def list_sessions():
@@ -1163,13 +1211,14 @@ def list_sessions():
     sessions = []
     sessions_dir = os.path.join(DATA_DIR, "sessions")
     if os.path.exists(sessions_dir):
-        for session_id in os.listdir(sessions_dir):
-            session_path = os.path.join(sessions_dir, session_id)
+        for folder_name in os.listdir(sessions_dir):
+            session_path = os.path.join(sessions_dir, folder_name)
             if os.path.isdir(session_path):
-                session_data = load_session(session_id)
+                session_data = load_session(folder_name)
                 if session_data:
                     sessions.append({
-                        "session_id": session_id,
+                        "session_id": session_data.get("session_id", folder_name),
+                        "storage_name": session_data.get("storage_name", folder_name),
                         "character_name": session_data.get("character_name", "未命名"),
                         "start_time": session_data.get("start_time", ""),
                         "current_stage": session_data.get("current_stage", ""),
@@ -1275,9 +1324,15 @@ def load_session_to_state(session_id: str):
     if not session_data:
         return
 
-    st.session_state.session_id = session_id
+    actual_session_id = session_data.get("session_id", session_id)
+    storage_name = session_data.get("storage_name", session_id)
+    st.session_state.session_id = actual_session_id
     st.session_state.start_time = session_data.get("start_time", "")
     st.session_state.messages = session_data.get("messages", [])
+    st.session_state.session_dirs = {
+        **st.session_state.get("session_dirs", {}),
+        actual_session_id: storage_name,
+    }
 
     current_stage = session_data.get("current_stage", "S0a")
     st.session_state.app_phase = session_data.get("app_phase", current_stage)
@@ -1360,9 +1415,13 @@ def load_session_to_state(session_id: str):
 def init_session_state():
     """初始化 Streamlit 会话状态"""
 
+    if "session_dirs" not in st.session_state:
+        st.session_state.session_dirs = {}
+
     if "session_id" not in st.session_state:
         st.session_state.session_id = str(uuid4())
         st.session_state.start_time = datetime.now().isoformat()
+        st.session_state.session_dirs[st.session_state.session_id] = build_session_folder_name(st.session_state.start_time)
         ensure_session_dirs()
 
     if "app_phase" not in st.session_state:
@@ -1602,7 +1661,10 @@ def render_sidebar():
         sessions = list_sessions()
         if sessions:
             st.markdown("**历史会话**")
-            session_options = {s["character_name"] or "未命名": s["session_id"] for s in sessions}
+            session_options = {
+                f"{s['character_name'] or '未命名'} · {s['storage_name']}": s["session_id"]
+                for s in sessions
+            }
             session_names = list(session_options.keys())[:5]
 
             selected = st.selectbox(
@@ -1695,7 +1757,7 @@ WELCOME_MESSAGE = """欢迎来到 AI 共创叙事画坊。
 
 我们会一起创造一个角色，探索 TA 在大学里可能遇到的故事，还会把关键瞬间画成连环画。
 
-整个过程大概 15-20 分钟，所有创作都是匿名的。
+整个过程大概 25-30 分钟，所有创作都是匿名的。
 
 准备好了吗？输入「准备好了」或者随便说点什么开始。"""
 

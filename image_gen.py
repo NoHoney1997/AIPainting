@@ -21,7 +21,7 @@ DASHSCOPE_API_KEY = os.getenv("DASHSCOPE_API_KEY")
 if not DASHSCOPE_API_KEY:
     raise ValueError("未设置 DASHSCOPE_API_KEY，请在 .env 文件中配置")
 
-LLM_MODEL = os.getenv("LLM_MODEL", "wqwen3.7-max")
+LLM_MODEL = os.getenv("LLM_MODEL", "deepseek-v4-pro")
 LLM_BASE_URL = os.getenv("LLM_BASE_URL", "https://dashscope.aliyuncs.com/compatible-mode/v1")
 
 # =============================================================================
