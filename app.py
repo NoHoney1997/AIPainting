@@ -412,8 +412,14 @@ def evaluate_user_input(
 {{"identified_targets":["{current_target}"], "is_sufficient":true/false, "follow_up_needed":true/false, "extracted_data":{{"{current_target}":"提取的内容"}}}}"""
 
     try:
+        model = os.getenv("LLM_MODEL", "qwen-max")
+        print(f"\n{'='*60}")
+        print(f"[模型调用] extract_target_data (数据提取)")
+        print(f"  模型: {model}")
+        print(f"  用途: 提取对话目标数据")
+        print(f"{'='*60}")
         response = llm_client.chat.completions.create(
-            model=os.getenv("LLM_MODEL", "qwen-max"),
+            model=model,
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt},
@@ -421,6 +427,7 @@ def evaluate_user_input(
             temperature=0.1,
             max_tokens=300,
         )
+        print(f"[模型调用] extract_target_data 完成")
         result_text = re.sub(r"```json\s*|```", "", response.choices[0].message.content.strip())
         result = json.loads(result_text)
         is_sufficient = bool(result.get("is_sufficient", False))
@@ -521,8 +528,14 @@ def _on_comic_flow_complete(situation: str):
 def call_llm(system_prompt: str, user_prompt: str, temperature: float = 0.7, max_tokens: int = 500) -> str:
     """调用LLM生成回复"""
     try:
+        model = os.getenv("LLM_MODEL", "qwen-max")
+        print(f"\n{'='*60}")
+        print(f"[模型调用] call_llm (通用对话)")
+        print(f"  模型: {model}")
+        print(f"  用途: 生成回复")
+        print(f"{'='*60}")
         response = llm_client.chat.completions.create(
-            model=os.getenv("LLM_MODEL", "qwen-max"),
+            model=model,
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt}
@@ -530,6 +543,7 @@ def call_llm(system_prompt: str, user_prompt: str, temperature: float = 0.7, max
             temperature=temperature,
             max_tokens=max_tokens
         )
+        print(f"[模型调用] call_llm 完成")
         return response.choices[0].message.content.strip()
     except Exception as e:
         st.error(f"LLM调用失败: {e}")
@@ -573,8 +587,14 @@ def is_state_description(user_input: str, context: Dict[str, Any] = None) -> boo
     system_prompt = "分类助手。只返回JSON，不添加其他内容。"
 
     try:
+        model = os.getenv("LLM_MODEL", "qwen-max")
+        print(f"\n{'='*60}")
+        print(f"[模型调用] is_state_description (状态/事件判断)")
+        print(f"  模型: {model}")
+        print(f"  用途: 判断用户描述是日常状态还是具体事件")
+        print(f"{'='*60}")
         response = llm_client.chat.completions.create(
-            model=os.getenv("LLM_MODEL", "qwen-max"),
+            model=model,
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": prompt}
@@ -582,6 +602,7 @@ def is_state_description(user_input: str, context: Dict[str, Any] = None) -> boo
             temperature=0.1,
             max_tokens=50
         )
+        print(f"[模型调用] is_state_description 完成")
 
         result_text = response.choices[0].message.content.strip()
         result_text = re.sub(r'```json\s*|```', '', result_text)
@@ -627,8 +648,14 @@ def match_style_with_llm(user_input: str, styles: List[Dict]) -> Optional[str]:
     system_prompt = "风格匹配助手。只返回JSON，不添加其他内容。"
 
     try:
+        model = os.getenv("LLM_MODEL", "qwen-max")
+        print(f"\n{'='*60}")
+        print(f"[模型调用] match_style_with_llm (风格匹配)")
+        print(f"  模型: {model}")
+        print(f"  用途: 匹配用户描述到预定义风格")
+        print(f"{'='*60}")
         response = llm_client.chat.completions.create(
-            model=os.getenv("LLM_MODEL", "qwen-max"),
+            model=model,
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": prompt}
@@ -636,6 +663,7 @@ def match_style_with_llm(user_input: str, styles: List[Dict]) -> Optional[str]:
             temperature=0.1,
             max_tokens=100
         )
+        print(f"[模型调用] match_style_with_llm 完成")
 
         result_text = response.choices[0].message.content.strip()
         result_text = re.sub(r'```json\s*|```', '', result_text)
@@ -685,8 +713,14 @@ def generate_context_aware_follow_up(stage: str, user_input: str, context: Dict[
 只返回追问内容，不要其他。"""
 
     try:
+        model = os.getenv("LLM_MODEL", "qwen-max")
+        print(f"\n{'='*60}")
+        print(f"[模型调用] generate_context_aware_follow_up (个性化追问)")
+        print(f"  模型: {model}")
+        print(f"  用途: 根据描述类型生成个性化追问")
+        print(f"{'='*60}")
         response = llm_client.chat.completions.create(
-            model=os.getenv("LLM_MODEL", "qwen-max"),
+            model=model,
             messages=[
                 {"role": "system", "content": "你是叙事引导助手。直接返回追问，不要评价，不要加引号。"},
                 {"role": "user", "content": prompt}
@@ -694,6 +728,7 @@ def generate_context_aware_follow_up(stage: str, user_input: str, context: Dict[
             temperature=0.7,
             max_tokens=100
         )
+        print(f"[模型调用] generate_context_aware_follow_up 完成")
         follow_up = response.choices[0].message.content.strip()
         follow_up = follow_up.strip('"\'')
         return follow_up
@@ -745,8 +780,14 @@ def parse_user_input_with_llm(stage: str, user_input: str, context: Dict[str, An
     system_prompt = """数据提取助手。只提取明确提到的内容，不添加。只返回JSON。"""
 
     try:
+        model = os.getenv("LLM_MODEL", "qwen-max")
+        print(f"\n{'='*60}")
+        print(f"[模型调用] parse_user_input_with_llm (用户输入解析)")
+        print(f"  模型: {model}")
+        print(f"  用途: 解析用户输入，提取阶段数据")
+        print(f"{'='*60}")
         response = llm_client.chat.completions.create(
-            model=os.getenv("LLM_MODEL", "qwen-max"),
+            model=model,
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt}
@@ -754,6 +795,7 @@ def parse_user_input_with_llm(stage: str, user_input: str, context: Dict[str, An
             temperature=0.1,
             max_tokens=300
         )
+        print(f"[模型调用] parse_user_input_with_llm 完成")
 
         result_text = response.choices[0].message.content.strip()
         result_text = re.sub(r'```json\s*|```', '', result_text)
@@ -868,8 +910,14 @@ def evaluate_s0_sufficiency(stage: str, user_input: str, history: List[Dict]) ->
         return {"is_sufficient": True, "follow_up_needed": False, "extracted_data": {}}
 
     try:
+        model = os.getenv("LLM_MODEL", "qwen-max")
+        print(f"\n{'='*60}")
+        print(f"[模型调用] evaluate_s0_sufficiency (S0阶段充分性评估)")
+        print(f"  模型: {model}")
+        print(f"  用途: 评估用户输入是否充分")
+        print(f"{'='*60}")
         response = llm_client.chat.completions.create(
-            model=os.getenv("LLM_MODEL", "qwen-max"),
+            model=model,
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt},
@@ -877,6 +925,7 @@ def evaluate_s0_sufficiency(stage: str, user_input: str, history: List[Dict]) ->
             temperature=0.1,
             max_tokens=400,
         )
+        print(f"[模型调用] evaluate_s0_sufficiency 完成")
         result_text = re.sub(r"```json\s*|```", "", response.choices[0].message.content.strip())
         result = json.loads(result_text)
         is_sufficient = bool(result.get("is_sufficient", False))
@@ -951,8 +1000,14 @@ def generate_follow_up(
 只返回追问内容。"""
 
     try:
+        model = os.getenv("LLM_MODEL", "qwen-max")
+        print(f"\n{'='*60}")
+        print(f"[模型调用] generate_follow_up (上下文追问生成)")
+        print(f"  模型: {model}")
+        print(f"  用途: 生成上下文感知的追问")
+        print(f"{'='*60}")
         response = llm_client.chat.completions.create(
-            model=os.getenv("LLM_MODEL", "qwen-max"),
+            model=model,
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt},
@@ -960,6 +1015,7 @@ def generate_follow_up(
             temperature=0.7,
             max_tokens=120,
         )
+        print(f"[模型调用] generate_follow_up 完成")
         follow_up = response.choices[0].message.content.strip().strip('"\'')
         if follow_up and len(follow_up) <= 80:
             return follow_up

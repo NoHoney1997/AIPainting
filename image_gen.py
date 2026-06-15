@@ -21,8 +21,12 @@ DASHSCOPE_API_KEY = os.getenv("DASHSCOPE_API_KEY")
 if not DASHSCOPE_API_KEY:
     raise ValueError("未设置 DASHSCOPE_API_KEY，请在 .env 文件中配置")
 
-LLM_MODEL = os.getenv("LLM_MODEL", "deepseek-v4-pro")
-LLM_BASE_URL = os.getenv("LLM_BASE_URL", "https://dashscope.aliyuncs.com/compatible-mode/v1")
+DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY")
+if not DEEPSEEK_API_KEY:
+    raise ValueError("未设置 DEEPSEEK_API_KEY，请在 .env 文件中配置")
+
+LLM_MODEL = os.getenv("LLM_MODEL", "deepseek-v4-flash")
+LLM_BASE_URL = os.getenv("LLM_BASE_URL", "https://api.deepseek.com")
 
 # =============================================================================
 # 图像生成模型配置
@@ -39,7 +43,7 @@ IMAGE_GEN_CONFIG = {
 }
 
 llm_client = OpenAI(
-    api_key=DASHSCOPE_API_KEY,
+    api_key=DEEPSEEK_API_KEY,
     base_url=LLM_BASE_URL
 )
 
@@ -125,6 +129,11 @@ def extract_character_features(description: str, gender: str = "unknown") -> Dic
 没有提到的字段设为空字符串。只返回JSON。"""
 
     try:
+        print(f"\n{'='*60}")
+        print(f"[模型调用] extract_character_features")
+        print(f"  模型: {LLM_MODEL}")
+        print(f"  用途: 提取角色视觉特征")
+        print(f"{'='*60}")
         response = llm_client.chat.completions.create(
             model=LLM_MODEL,
             messages=[
@@ -134,7 +143,7 @@ def extract_character_features(description: str, gender: str = "unknown") -> Dic
             temperature=0.1,
             max_tokens=300
         )
-
+        print(f"[模型调用] extract_character_features 完成")
         result_text = response.choices[0].message.content.strip()
         result_text = re.sub(r'```json\s*|```', '', result_text)
         features = json.loads(result_text)
@@ -272,7 +281,12 @@ def _call_wanx_t2i(prompt: str) -> str:
         "Content-Type": "application/json"
     }
 
-    print(f"[DEBUG] Calling {IMAGE_GEN_MODEL} with prompt length: {len(prompt)}")
+    print(f"\n{'='*60}")
+    print(f"[模型调用] _call_wanx_t2i (文生图，无参考图)")
+    print(f"  模型: {IMAGE_GEN_MODEL}")
+    print(f"  用途: 生成角色画像")
+    print(f"  Prompt长度: {len(prompt)} 字符")
+    print(f"{'='*60}")
 
     response = requests.post(
         IMAGE_GEN_API_URL,
@@ -281,14 +295,14 @@ def _call_wanx_t2i(prompt: str) -> str:
         timeout=180
     )
 
-    print(f"[DEBUG] API Response Status: {response.status_code}")
+    print(f"[模型调用] _call_wanx_t2i 响应状态: {response.status_code}")
 
     if response.status_code != 200:
-        print(f"[DEBUG] API Response: {response.text[:800]}")
+        print(f"[模型调用] _call_wanx_t2i 错误响应: {response.text[:800]}")
         raise Exception(f"API error: {response.status_code} - {response.text}")
 
     result = response.json()
-    print(f"[DEBUG] API Response: {json.dumps(result, ensure_ascii=False)[:500]}")
+    print(f"[模型调用] _call_wanx_t2i 解析结果: {json.dumps(result, ensure_ascii=False)[:500]}")
 
     return _parse_api_response(result)
 
@@ -320,7 +334,13 @@ def _call_wanx_t2i_with_ref(prompt: str, ref_image_path: str) -> str:
         "Content-Type": "application/json"
     }
 
-    print(f"[DEBUG] Calling {IMAGE_GEN_MODEL} with reference image")
+    print(f"\n{'='*60}")
+    print(f"[模型调用] _call_wanx_t2i_with_ref (文生图，带参考图)")
+    print(f"  模型: {IMAGE_GEN_MODEL}")
+    print(f"  用途: 生成漫画分镜（参考角色画像）")
+    print(f"  参考图: {ref_image_path}")
+    print(f"  Prompt长度: {len(prompt)} 字符")
+    print(f"{'='*60}")
 
     response = requests.post(
         IMAGE_GEN_API_URL,
@@ -329,14 +349,14 @@ def _call_wanx_t2i_with_ref(prompt: str, ref_image_path: str) -> str:
         timeout=180
     )
 
-    print(f"[DEBUG] Ref API Response Status: {response.status_code}")
+    print(f"[模型调用] _call_wanx_t2i_with_ref 响应状态: {response.status_code}")
 
     if response.status_code != 200:
-        print(f"[DEBUG] Ref API Response: {response.text[:800]}")
+        print(f"[模型调用] _call_wanx_t2i_with_ref 错误响应: {response.text[:800]}")
         raise Exception(f"API error: {response.status_code} - {response.text}")
 
     result = response.json()
-    print(f"[DEBUG] Ref API Response: {json.dumps(result, ensure_ascii=False)[:500]}")
+    print(f"[模型调用] _call_wanx_t2i_with_ref 解析结果: {json.dumps(result, ensure_ascii=False)[:500]}")
 
     return _parse_api_response(result)
 
