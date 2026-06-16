@@ -479,25 +479,75 @@ def store_target_data(target_id: str, context: str, data: Any):
 
 def _init_comic_frames():
     situation = "A" if st.session_state.current_context == CONTEXT_ACADEMIC else "B"
+    saved_comic = st.session_state.stage_A_comic if situation == "A" else st.session_state.stage_B_comic
+    existing_frames = saved_comic.get("frames", []) if isinstance(saved_comic, dict) else []
+
+    def _frame_to_parsed(frame, idx):
+        return {
+            "description": frame.get("description", ""),
+            "story_text": frame.get("story_text", frame.get("description", "")),
+            "visual_description": frame.get("visual_description", frame.get("description", "")),
+            "frame_number": frame.get("frame_index", idx + 1),
+        }
+
+    if existing_frames:
+        st.session_state.comic_frames_parsed = [_frame_to_parsed(frame, idx) for idx, frame in enumerate(existing_frames)]
+        st.session_state.comic_situation = situation
+        st.session_state.comic_style = st.session_state.get("portrait_style", "动漫")
+        st.session_state.comic_story_generated = any(frame.get("story_text") for frame in existing_frames)
+        st.session_state.comic_story_approved = saved_comic.get("confirmed", False)
+        st.session_state.comic_story_data = [
+            {
+                "story_text": frame.get("story_text", frame.get("description", "")),
+                "visual_description": frame.get("visual_description", frame.get("description", "")),
+            }
+            for frame in existing_frames
+        ]
+        return
+
     default_frames = [
-        {"description": "", "frame_number": 1},
-        {"description": "", "frame_number": 2},
-        {"description": "", "frame_number": 3},
+        {
+            "description": "",
+            "story_text": "",
+            "visual_description": "",
+            "frame_number": 1,
+        },
+        {
+            "description": "",
+            "story_text": "",
+            "visual_description": "",
+            "frame_number": 2,
+        },
+        {
+            "description": "",
+            "story_text": "",
+            "visual_description": "",
+            "frame_number": 3,
+        },
     ]
     st.session_state.comic_frames_parsed = default_frames
     comic_data = {"frames": [], "confirmed": False}
     for i, _ in enumerate(default_frames):
         comic_data["frames"].append({
-            "frame_index": i + 1, "description": "", "versions": [],
-            "current_version": 0, "final_version": 0, "final_path": "", "image_path": "",
+            "frame_index": i + 1,
+            "description": "",
+            "story_text": "",
+            "visual_description": "",
+            "versions": [],
+            "current_version": 0,
+            "final_version": 0,
+            "final_path": "",
+            "image_path": "",
         })
     if situation == "A":
         st.session_state.stage_A_comic = comic_data
     else:
         st.session_state.stage_B_comic = comic_data
     st.session_state.comic_situation = situation
-    # 使用用户选择的画像风格作为连环画风格
     st.session_state.comic_style = st.session_state.get("portrait_style", "动漫")
+    st.session_state.comic_story_generated = False
+    st.session_state.comic_story_approved = False
+    st.session_state.comic_story_data = []
 
 
 def legacy_stage_to_context_target(stage: str):
@@ -1230,6 +1280,9 @@ def save_session():
         "stage_A2c_framing": st.session_state.get("stage_A2c_framing", ""),
         "stage_A_comic": st.session_state.get("stage_A_comic", {}),
         "comic_style": st.session_state.get("comic_style", st.session_state.get("portrait_style", "动漫")),
+        "comic_story_generated": st.session_state.get("comic_story_generated", False),
+        "comic_story_approved": st.session_state.get("comic_story_approved", False),
+        "comic_story_data": st.session_state.get("comic_story_data", []),
         "stage_B_material": st.session_state.get("stage_B_material", {}),
         "stage_B2a_quote": st.session_state.get("stage_B2a_quote", ""),
         "stage_B2b_reflection": st.session_state.get("stage_B2b_reflection", ""),
@@ -1467,6 +1520,9 @@ def load_session_to_state(session_id: str):
     st.session_state.stage_A2c_framing = session_data.get("stage_A2c_framing", "")
     st.session_state.stage_A_comic = session_data.get("stage_A_comic", {})
     st.session_state.comic_style = session_data.get("comic_style", st.session_state.portrait_style or "动漫")
+    st.session_state.comic_story_generated = session_data.get("comic_story_generated", False)
+    st.session_state.comic_story_approved = session_data.get("comic_story_approved", False)
+    st.session_state.comic_story_data = session_data.get("comic_story_data", [])
 
     st.session_state.stage_B_material = session_data.get("stage_B_material", {})
     st.session_state.stage_B2a_quote = session_data.get("stage_B2a_quote", "")
@@ -1727,6 +1783,15 @@ def init_session_state():
 
     if "comic_editing_mode" not in st.session_state:
         st.session_state.comic_editing_mode = False
+
+    if "comic_story_generated" not in st.session_state:
+        st.session_state.comic_story_generated = False
+
+    if "comic_story_approved" not in st.session_state:
+        st.session_state.comic_story_approved = False
+
+    if "comic_story_data" not in st.session_state:
+        st.session_state.comic_story_data = []
 
     if "state_cache" not in st.session_state:
         st.session_state.state_cache = {}
@@ -2153,6 +2218,8 @@ def _get_comic_frame_record(comic_data, frame_index):
     frame_record = {
         "frame_index": frame_index,
         "description": "",
+        "story_text": "",
+        "visual_description": "",
         "versions": [],
         "current_version": 0,
         "final_version": 0,
@@ -2172,10 +2239,12 @@ def _ensure_frame_records():
     for idx, frame in enumerate(frames_parsed):
         frame_num = idx + 1
         _get_comic_frame_record(comic_data, frame_num)
-        # 更新描述
+        # 同步各层字段
         for f in comic_data["frames"]:
             if f.get("frame_index") == frame_num:
                 f["description"] = frame.get("description", "")
+                f["story_text"] = frame.get("story_text", frame.get("description", ""))
+                f["visual_description"] = frame.get("visual_description", frame.get("description", ""))
 
 
 def _generate_single_frame(frame_num, desc_override=None):
@@ -2190,7 +2259,7 @@ def _generate_single_frame(frame_num, desc_override=None):
         description = desc_override
     else:
         frame_data = frames_parsed[frame_num - 1] if frame_num <= len(frames_parsed) else {}
-        description = frame_data.get("description", "")
+        description = frame_data.get("visual_description", frame_data.get("description", ""))
     
     current_v = frame_record["current_version"]
     
@@ -2198,6 +2267,7 @@ def _generate_single_frame(frame_num, desc_override=None):
         description=description,
         portrait_path=st.session_state.portrait_final,
         character_features=st.session_state.character_features,
+        character_features_text=st.session_state.get("character_appearance", ""),
         frame_index=frame_num,
         session_id=st.session_state.session_id,
         situation=f"stage_{situation}",
@@ -2239,32 +2309,39 @@ def _render_comic_frame_row(frame_num, frame_record, frames_parsed, situation):
     """渲染单个分镜行（每行一格，左侧编辑描述，右侧显示图片）"""
     frame_data = frames_parsed[frame_num - 1] if frame_num <= len(frames_parsed) else {}
     description = frame_data.get("description", "")
+    story_text = frame_data.get("story_text", description)
+    visual_description = frame_data.get("visual_description", description)
     versions = frame_record.get("versions", [])
     has_image = frame_record.get("image_path") and os.path.exists(frame_record["image_path"])
     current_v = frame_record.get("current_version", 0)
     final_v = frame_record.get("final_version", 0)
 
-    # 每行布局：左侧(编辑区) | 右侧(图片区)
     col1, col2 = st.columns([1, 1.5])
 
     with col1:
         st.markdown(f"**第{frame_num}格**")
-        # 文本输入框用于编辑描述（必填）
-        new_desc = st.text_area(
-            "描述（必填）",
-            value=description,
-            key=f"desc_{frame_num}",
+        story_text_input = st.text_area(
+            "故事文案",
+            value=story_text,
+            key=f"story_{frame_num}",
+            height=80,
+            placeholder="这一格讲了什么，保留叙事和语气...",
+        )
+        visual_description_input = st.text_area(
+            "画面描述（用于生成图像）",
+            value=visual_description,
+            key=f"visual_{frame_num}",
             height=100,
-            placeholder="请描述这一格画面的人物、动作、表情、环境等..."
+            placeholder="请描述画面中的人物、动作、表情、环境等...",
         )
 
-        # 如果描述有变化，更新数据
-        if new_desc != description:
-            # 更新 frames_parsed
+        if story_text_input != story_text or visual_description_input != visual_description:
             if frame_num <= len(frames_parsed):
-                frames_parsed[frame_num - 1]["description"] = new_desc
-            # 更新 comic_data 中的 frame_record
-            frame_record["description"] = new_desc
+                frames_parsed[frame_num - 1]["story_text"] = story_text_input
+                frames_parsed[frame_num - 1]["visual_description"] = visual_description_input
+            frame_record["description"] = visual_description_input
+            frame_record["story_text"] = story_text_input
+            frame_record["visual_description"] = visual_description_input
             save_session()
 
         # 操作按钮行
@@ -2284,7 +2361,7 @@ def _render_comic_frame_row(frame_num, frame_record, frames_parsed, situation):
                         st.rerun()
         with col_confirm:
             # 获取最新描述
-            current_desc = st.session_state.get(f"desc_{frame_num}", description)
+            current_desc = st.session_state.get(f"visual_{frame_num}", visual_description)
             if has_image and len(versions) > 0:
                 if len(versions) == 1:
                     if current_desc and len(current_desc.strip()) > 0:
@@ -2481,18 +2558,13 @@ def _render_comic_editing_mode():
                 # 重新编号
                 for i, fp in enumerate(frames_parsed):
                     fp["frame_number"] = i + 1
-                for f in comic_data["frames"]:
-                    f["frame_index"] = f.get("frame_index", 0)
-                    for fp in frames_parsed:
-                        if f.get("description") == fp.get("description"):
-                            f["frame_index"] = fp["frame_number"]
-                            break
-                # 简化：直接重建 frames
                 comic_data["frames"] = []
                 for i, fp in enumerate(frames_parsed):
                     frame_record = {
                         "frame_index": i + 1,
                         "description": fp.get("description", ""),
+                        "story_text": fp.get("story_text", ""),
+                        "visual_description": fp.get("visual_description", fp.get("description", "")),
                         "versions": [],
                         "current_version": 0,
                         "final_version": 0,
@@ -2572,6 +2644,8 @@ def _render_comic_generation_view():
             frame_record = {
                 "frame_index": total_frames + 1,
                 "description": "",
+                "story_text": "",
+                "visual_description": "",
                 "versions": [],
                 "current_version": 0,
                 "final_version": 0,
@@ -2610,7 +2684,8 @@ def _render_comic_generation_view():
             comic_data["confirmed"] = True
             log_event("comic_complete",
                       situation=situation,
-                      frame_count=len(comic_data["frames"]))
+                      frame_count=len(comic_data["frames"]),
+                      story_approved=st.session_state.get("comic_story_approved", False))
 
             if situation == "A":
                 # 学业连环画完成，切换到人际故事
@@ -2639,17 +2714,168 @@ def _render_comic_generation_view():
             st.caption("每个情境至少需要3格连环画")
 
 
+
+def _build_comic_story_prompt(situation, material, frames_parsed):
+    context = "学业" if situation == "A" else "人际"
+    material_summary = "\n".join(
+        f"- {key}: {value}" for key, value in material.items() if value
+    ) or "请根据分镜描述补全"
+
+    frame_summary = "\n".join(
+        f"{idx + 1}. {frame.get('description', '')}" for idx, frame in enumerate(frames_parsed[:5])
+    )
+    return f"""请为{context}故事生成{len(frames_parsed[:5])}格连环画文字稿。
+只输出JSON数组，每项包含 story_text 和 visual_description，不要其他内容。
+
+故事材料：
+{material_summary}
+
+分镜描述（供参考）：
+{frame_summary}
+
+请严格按照以下JSON格式返回：
+[
+  {{"story_text": "...", "visual_description": "..."}},
+  ...
+]"""
+
+
+def generate_comic_story(situation, material, frames_parsed):
+    prompt = _build_comic_story_prompt(situation, material, frames_parsed)
+    model = os.getenv("LLM_MODEL", "qwen-max")
+    response = llm_client.chat.completions.create(
+        model=model,
+        messages=[
+            {"role": "system", "content": "输出严格JSON，不要任何说明。"},
+            {"role": "user", "content": prompt},
+        ],
+        temperature=0.5,
+        max_tokens=2000,
+    )
+    content = response.choices[0].message.content.strip()
+    content = re.sub(r"```json|```", "", content)
+    story_data = json.loads(content)
+    if not isinstance(story_data, list):
+        raise ValueError("comic story data must be a list")
+    return story_data
+
+
+
+def _on_comic_story_field_changed(frame_idx: int, field: str):
+    frames_parsed = st.session_state.comic_frames_parsed
+    if frame_idx >= len(frames_parsed):
+        return
+    field_to_key = {
+        "story_text": f"story_text_{frame_idx}",
+        "visual_description": f"visual_desc_{frame_idx}",
+    }
+    key = field_to_key.get(field, f"{field}_{frame_idx}")
+    value = st.session_state.get(key, frames_parsed[frame_idx].get(field, ""))
+    frames_parsed[frame_idx][field] = value
+    if field == "visual_description":
+        frames_parsed[frame_idx]["description"] = value
+        comic_data = st.session_state.stage_A_comic if st.session_state.comic_situation == "A" else st.session_state.stage_B_comic
+        record = _get_comic_frame_record(comic_data, frame_idx + 1)
+        record["description"] = value
+        record["visual_description"] = value
+        record["story_text"] = frames_parsed[frame_idx].get("story_text", "")
+    else:
+        comic_data = st.session_state.stage_A_comic if st.session_state.comic_situation == "A" else st.session_state.stage_B_comic
+        record = _get_comic_frame_record(comic_data, frame_idx + 1)
+        record["story_text"] = value
+    log_event("comic_story_field_updated",
+              frame=frame_idx + 1,
+              field=field)
+    save_session()
+
+
+def _render_comic_story_editor(situation):
+    story_type = "学业" if situation == "A" else "人际"
+    st.markdown(f"#### ✍️ {story_type}故事文案生成")
+    frames_parsed = st.session_state.comic_frames_parsed
+    total_frames = len(frames_parsed)
+
+    if not st.session_state.get("comic_story_generated"):
+        if st.button("🤖 生成故事文案", type="primary"):
+            with st.spinner("正在生成连环画文字稿..."):
+                try:
+                    material = st.session_state.stage_A_material if situation == "A" else st.session_state.stage_B_material
+                    story_data = generate_comic_story(situation, material, frames_parsed)
+                except Exception as e:
+                    st.error(f"生成失败: {e}")
+                    story_data = []
+                if story_data:
+                    for idx, frame in enumerate(frames_parsed):
+                        if idx < len(story_data):
+                            frame["story_text"] = story_data[idx].get("story_text", frame.get("story_text", ""))
+                            frame["visual_description"] = story_data[idx].get("visual_description", frame.get("visual_description", ""))
+                            frame["description"] = frame["visual_description"]
+                            comic_data = st.session_state.stage_A_comic if situation == "A" else st.session_state.stage_B_comic
+                            record = _get_comic_frame_record(comic_data, idx + 1)
+                            record["story_text"] = frame["story_text"]
+                            record["visual_description"] = frame["visual_description"]
+                            record["description"] = frame["visual_description"]
+                    st.session_state.comic_story_data = [
+                        {
+                            "story_text": frame.get("story_text", ""),
+                            "visual_description": frame.get("visual_description", frame.get("description", "")),
+                        }
+                        for frame in frames_parsed
+                    ]
+                    st.session_state.comic_story_generated = True
+                    st.session_state.comic_story_approved = False
+                    log_event("comic_story_generated",
+                              situation=situation,
+                              frame_count=len(frames_parsed))
+                    save_session()
+                    st.rerun()
+                else:
+                    st.warning("未生成故事文案，请重试。")
+    else:
+        st.success("已生成故事文案，请在下方编辑后开始生成画面。")
+        for idx, frame in enumerate(frames_parsed):
+            with st.expander(f"第{idx + 1}格 文案", expanded=False):
+                st.text_area(
+                    "故事文案",
+                    value=frame.get("story_text", ""),
+                    key=f"story_text_{idx}",
+                    height=120,
+                    on_change=lambda i=idx: _on_comic_story_field_changed(i, "story_text"),
+                )
+                st.text_area(
+                    "画面描述",
+                    value=frame.get("visual_description", ""),
+                    key=f"visual_desc_{idx}",
+                    height=120,
+                    on_change=lambda i=idx: _on_comic_story_field_changed(i, "visual_description"),
+                )
+        col_confirm, col_regenerate, col_finish = st.columns(3)
+        with col_confirm:
+            if st.button("✓ 确认故事文案"):
+                st.session_state.comic_story_approved = True
+                log_event("comic_story_approved", situation=situation, frame_count=len(frames_parsed))
+                save_session()
+                st.rerun()
+        with col_regenerate:
+            if st.button("🔄 重新生成"):
+                st.session_state.comic_story_generated = False
+                save_session()
+                st.rerun()
+        with col_finish:
+            if st.button("✓ 开始生成画面", type="primary"):
+                st.rerun()
+
+
 def render_comic_ui():
     """渲染连环画生成界面"""
     situation = st.session_state.comic_situation
     comic_data = st.session_state.stage_A_comic if situation == "A" else st.session_state.stage_B_comic
     frames_parsed = st.session_state.comic_frames_parsed
     total_frames = len(frames_parsed)
-    
-    # 显示标题
+
     story_type = "学业" if situation == "A" else "人际"
     st.markdown(f"### 🎬 {story_type}故事连环画生成")
-    
+
     if total_frames == 0:
         st.warning("没有分镜数据，请返回重新选择关键瞬间")
         if st.button("← 返回"):
@@ -2659,8 +2885,15 @@ def render_comic_ui():
                 st.session_state.app_phase = "B3a"
             st.rerun()
         return
-    
-    # 正常生成视图
+
+    _ensure_frame_records()
+    _render_comic_story_editor(situation)
+
+    if not st.session_state.get("comic_story_approved"):
+        st.stop()
+
+    st.markdown("---")
+    st.markdown("#### 🖼️ 画面生成与确认")
     _render_comic_generation_view()
 
 def render_rewrite_ui():

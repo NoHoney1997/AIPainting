@@ -190,6 +190,15 @@ def generate_portrait(description: str, session_id: str, style: str = "写实", 
 
     return {"image_path": "", "success": False, "error": "未知错误"}
 
+def _summarize_character_features(features: Dict[str, Any]) -> str:
+    """将角色特征字典汇总为一段自然语言描述"""
+    parts = []
+    for key, value in features.items():
+        if value and value not in (None, "", [], {}):
+            parts.append(f"{key}: {value}")
+    return "；".join(parts) if parts else ""
+
+
 def generate_comic_frame(
     description: str,
     portrait_path: Optional[str],
@@ -197,7 +206,8 @@ def generate_comic_frame(
     frame_index: int,
     session_id: str,
     situation: str,
-    style: str = "动漫"
+    style: str = "动漫",
+    character_features_text: Optional[str] = None,
 ) -> Dict[str, Any]:
     """生成漫画分镜"""
     style_info = IMAGE_STYLES.get(style, IMAGE_STYLES["动漫"])
@@ -208,9 +218,15 @@ def generate_comic_frame(
     timestamp = int(time.time())
     output_path = os.path.join(session_images_dir, f"comic_{situation}_{frame_index}_{style}_v{timestamp}.png")
 
+    appearance_text = character_features_text
+    if not appearance_text and character_features:
+        appearance_text = _summarize_character_features(character_features)
     prompt = f"""生成一幅漫画风格的单幅场景画面。
 
 风格：{style_info["prompt_suffix"]}
+
+角色外貌参考：
+{appearance_text}
 
 场景描述：
 {description}
