@@ -7,6 +7,7 @@ import os
 import json
 import time
 import re
+import shutil
 from datetime import datetime
 from uuid import uuid4
 from typing import Dict, Any, List, Optional
@@ -1272,10 +1273,46 @@ def log_event(event_type: str, **data):
         entry["target"] = st.session_state.get("current_target")
     st.session_state.log_entries.append(entry)
 
+def cleanup_old_session_folders(session_id: str, current_storage_name: str):
+    """清理同名会话的旧文件夹（UUID命名的）"""
+    sessions_dir = os.path.join(DATA_DIR, "sessions")
+    if not os.path.exists(sessions_dir):
+        return
+    
+    # 遍历所有文件夹
+    for folder_name in os.listdir(sessions_dir):
+        folder_path = os.path.join(sessions_dir, folder_name)
+        if not os.path.isdir(folder_path):
+            continue
+        
+        # 跳过当前使用的文件夹
+        if folder_name == current_storage_name:
+            continue
+        
+        # 检查这个文件夹是否属于同一个会话
+        session_file = os.path.join(folder_path, "session.json")
+        if os.path.exists(session_file):
+            try:
+                with open(session_file, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                # 如果 session_id 匹配，说明是旧文件夹
+                if data.get("session_id") == session_id:
+                    # 删除旧文件夹
+                    shutil.rmtree(folder_path)
+                    print(f"清理旧会话文件夹: {folder_name}")
+            except Exception:
+                pass
+
+
 def save_session():
     """保存完整会话数据"""
     session_id = st.session_state.session_id
+    storage_name = get_session_storage_name(session_id)
     session_dir = get_session_dir(session_id)
+    
+    # 清理旧的同名会话文件夹
+    cleanup_old_session_folders(session_id, storage_name)
+    
     ensure_session_dirs(session_id)
 
     session_data = {
@@ -1911,10 +1948,24 @@ def render_sidebar():
             completed_count = academic_completed + social_completed + (1 if perspective_done else 0)
             overall_pct = completed_count / total_targets if total_targets else 0
 
-            academic_done = academic_completed >= len(academic_targets)
-            social_done = social_completed >= len(social_targets)
+            # 基于 app_phase 状态机判断当前阶段
+            app_phase = get_app_phase()
+            
+            # 判断学业故事是否完成（连环画已确认）
+            academic_done = _count_met_targets(CONTEXT_ACADEMIC, ["comic_confirmed"]) > 0 or bool(st.session_state.stage_A_comic.get("confirmed"))
+            # 判断人际故事是否完成（连环画已确认）
+            social_done = _count_met_targets(CONTEXT_SOCIAL, ["comic_confirmed"]) > 0 or bool(st.session_state.stage_B_comic.get("confirmed"))
+            perspective_done = _is_perspective_practice_complete()
+            
+            # 基于状态机阶段判断当前显示
             st.markdown("**当前阶段**")
-            if academic_done and social_done and perspective_done:
+            if app_phase in ["S0a", "S0b", "S0c", "S0d"]:
+                st.markdown("⏳ 角色创建中")
+            elif app_phase in ["P4A_REWRITE", "P4A_DIFF", "P4B_REWRITE", "P4B_DIFF"]:
+                st.markdown("⏳ 视角练习中")
+            elif app_phase == "DEBRIEF":
+                st.markdown("⏳ 创作回顾中")
+            elif app_phase == "DONE":
                 st.markdown("✅ 全部完成")
             elif academic_done and social_done:
                 st.markdown("⏳ 视角练习中")
