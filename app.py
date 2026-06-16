@@ -134,7 +134,7 @@ STAGE_GOALS = {
     "B3a": "回顾之前的故事素材，引导用户挑选3-5个关键瞬间",
     "B3b": "由代码逐格生成连环画",
     "B3c": "简短确认，过渡到视角练习",
-    "P4A_REWRITE": "引入编剧视角切换概念，引导用户用第一人称改写学业故事内心独白",
+    "P4A_REWRITE": "引入编剧视角切换概念，引导用户用第一人称改写{work_or_study}故事内心独白",
     "P4A_DIFF": "展示旁观视角和沉浸视角两个版本对比，引导讨论差异",
     "P4B_REWRITE": "引导用户用第一人称改写人际故事内心独白",
     "P4B_DIFF": "展示两个版本对比，引导讨论差异",
@@ -203,7 +203,7 @@ TARGET_NAMES = {
 }
 
 TARGET_DESCRIPTIONS = {
-    "story_dilemma": "描述角色遇到的学业/人际困扰",
+    "story_dilemma": "描述角色遇到的{work_or_study}/人际困扰",
     "story_context": "描述具体的时间、地点、人物和细节",
     "story_reaction": "描述角色的行为反应",
     "story_impact": "描述事件对角色的后续影响",
@@ -231,7 +231,7 @@ TARGET_SUFFICIENCY_CRITERIA = {
 TARGET_COLLECT_PROMPTS = {
     "S0a": "虚构角色的姓名、性别、上学/工作状态，以及对应学段/学历或职业与工龄，大学需要专业，可含一点性格或特点。",
     "S0b": "角色的外貌：发型、脸型、眉眼、身材、穿衣风格、常见表情或整体气质。",
-    "story_dilemma": "角色遇到了什么学业/人际困扰？是什么事件或处境？",
+    "story_dilemma": "角色遇到了什么{work_or_study}/人际困扰？是什么事件或处境？",
     "story_context": "具体场合、在场人物、当时发生了什么细节？",
     "story_reaction": "角色当时做了什么、没做什么，或强烈想做什么？",
     "story_impact": "这件事之后对角色心情、作息或与他人相处有什么变化？",
@@ -349,12 +349,38 @@ def is_in_story_flow() -> bool:
 
 
 def _get_work_or_study_term() -> str:
+    """根据角色状态返回'学业'或'工作'"""
     status = st.session_state.get("character_status", "")
     if status == "study":
         return "学业"
     if status == "work":
         return "工作"
     return "学业"
+
+
+def get_work_or_study_label(label_type: str = "default") -> str:
+    """
+    获取动态的学业/工作相关标签。
+    
+    Args:
+        label_type: 标签类型
+            - "default": 返回"学业"或"工作"
+            - "story": 返回"学业故事"或"工作故事"
+            - "comic": 返回"学业连环画"或"工作连环画"
+            - "trouble": 返回"学业困扰"或"工作困扰"
+            - "complete": 返回"学业故事...已完成"或"工作故事...已完成"
+    """
+    term = _get_work_or_study_term()
+    
+    labels = {
+        "default": term,
+        "story": f"{term}故事",
+        "comic": f"{term}连环画",
+        "trouble": f"{term}困扰",
+        "complete": f"{term}故事的连环画完成了",
+    }
+    
+    return labels.get(label_type, term)
 
 
 def generate_target_guide(target_id: str, context: str = None) -> str:
@@ -373,10 +399,14 @@ def generate_target_guide(target_id: str, context: str = None) -> str:
 
 
 def switch_to_social_context() -> str:
+    """切换到人际故事上下文，返回引导语"""
     st.session_state.current_context = CONTEXT_SOCIAL
     st.session_state.current_target = "story_dilemma"
+    # 从 TARGET_GUIDES 获取模板并替换所有占位符
+    template = TARGET_GUIDES[CONTEXT_SOCIAL]["story_dilemma"]
     name = st.session_state.get("character_name", "TA")
-    return TARGET_GUIDES[CONTEXT_SOCIAL]["story_dilemma"].replace("{name}", name)
+    work_or_study = _get_work_or_study_term()
+    return template.replace("{name}", name).replace("{work_or_study}", work_or_study)
 
 
 def evaluate_user_input(
@@ -396,7 +426,7 @@ def evaluate_user_input(
         role = "用户" if msg.get("role") == "user" else "助手"
         history_summary += f"{role}：{msg.get('content', '')[:120]}\n"
 
-    ctx_label = "学业故事" if context == CONTEXT_ACADEMIC else "人际故事"
+    ctx_label = f"{_get_work_or_study_term()}故事" if context == CONTEXT_ACADEMIC else "人际故事"
     collect_hint = get_target_prompt(current_target)
     sufficiency_rule = get_target_sufficiency_criteria(current_target)
 
@@ -1042,7 +1072,7 @@ def generate_follow_up(
     collect_hint = get_target_prompt(target_id)
 
     if context in (CONTEXT_ACADEMIC, CONTEXT_SOCIAL):
-        ctx_label = "学业故事" if context == CONTEXT_ACADEMIC else "人际故事"
+        ctx_label = f"{_get_work_or_study_term()}故事" if context == CONTEXT_ACADEMIC else "人际故事"
     else:
         ctx_label = "角色创建"
 
@@ -1907,7 +1937,7 @@ def render_sidebar():
 
         with st.expander("查看完整故事"):
             if st.session_state.stage_A_material.get("dilemma"):
-                st.markdown("**学业困扰**")
+                st.markdown(f"**{_get_work_or_study_term()}困扰**")
                 st.text(st.session_state.stage_A_material["dilemma"][:200] + "...")
 
             if st.session_state.stage_B_material.get("dilemma"):
@@ -1915,7 +1945,7 @@ def render_sidebar():
                 st.text(st.session_state.stage_B_material["dilemma"][:200] + "...")
 
             if st.session_state.stage_A_comic.get("frames"):
-                st.markdown("**学业连环画**")
+                st.markdown(f"**{_get_work_or_study_term()}连环画**")
                 cols = st.columns(len(st.session_state.stage_A_comic["frames"]))
                 for i, f in enumerate(st.session_state.stage_A_comic["frames"]):
                     if f.get("final_path") and os.path.exists(f["final_path"]):
@@ -2726,7 +2756,7 @@ def _render_comic_generation_view():
 
 
 def _build_comic_story_prompt(situation, material, frames_parsed):
-    context = "学业" if situation == "A" else "人际"
+    context = f"{_get_work_or_study_term()}" if situation == "A" else "人际"
     material_summary = "\n".join(
         f"- {key}: {value}" for key, value in material.items() if value
     ) or "请根据分镜描述补全"
@@ -2772,7 +2802,7 @@ def generate_comic_story(situation, material, frames_parsed):
 
 def _render_comic_story_display(situation):
     """显示故事文案编辑提示（实际编辑在分镜行中进行）"""
-    story_type = "学业" if situation == "A" else "人际"
+    story_type = f"{_get_work_or_study_term()}" if situation == "A" else "人际"
     st.markdown(f"#### ✍️ {story_type}故事文案编辑")
 
 
@@ -2788,7 +2818,7 @@ def render_comic_ui():
 
     total_frames = len(frames_parsed)
 
-    story_type = "学业" if situation == "A" else "人际"
+    story_type = f"{_get_work_or_study_term()}" if situation == "A" else "人际"
     st.markdown(f"### 🎬 {story_type}故事连环画生成")
 
     if total_frames == 0:
@@ -2857,7 +2887,7 @@ def render_rewrite_ui():
     # 获取对应的连环画数据
     if situation == "A":
         comic_data = st.session_state.stage_A_comic
-        story_type = "学业"
+        story_type = f"{_get_work_or_study_term()}"
     else:
         comic_data = st.session_state.stage_B_comic
         story_type = "人际"
@@ -2935,7 +2965,7 @@ def render_rewrite_ui():
         st.rerun()
 
 def generate_diff_guide(original_quote: str, rewrite_quote: str, situation: str) -> str:
-    story_type = "学业" if situation == "A" else "人际"
+    story_type = f"{_get_work_or_study_term()}" if situation == "A" else "人际"
 
     user_prompt = f"""这是{story_type}故事的视角改写对比：
 
@@ -2963,7 +2993,7 @@ def render_diff_ui():
         framing = st.session_state.stage_A2c_framing or material.get("impact") or ""
         rewrite_quote = st.session_state.stage4_rewrite_A
         diff_comment_key = "stage4_diff_A"
-        story_type = "学业"
+        story_type = f"{_get_work_or_study_term()}"
         stage_prefix = "A"
     else:
         material = st.session_state.stage_B_material
@@ -3095,7 +3125,7 @@ def render_done_ui():
     col1, col2 = st.columns(2)
 
     with col1:
-        st.markdown("**学业故事**")
+        st.markdown(f"**{_get_work_or_study_term()}故事**")
         frames_a = st.session_state.stage_A_comic.get("frames", [])
         if frames_a:
             for i, frame in enumerate(frames_a):
@@ -3103,7 +3133,7 @@ def render_done_ui():
                 if final_path and os.path.exists(final_path):
                     st.image(final_path, width=280, caption=f"第{i+1}格")
         else:
-            st.info("尚未生成学业故事连环画")
+            st.info(f"尚未生成{_get_work_or_study_term()}故事连环画")
 
     with col2:
         st.markdown("**人际故事**")
@@ -3441,7 +3471,7 @@ def main():
                 content = msg.get("content", "")
                 if msg["role"] == "assistant" and "请稍候" in content:
                     portrait_msg_idx = i
-                if msg["role"] == "assistant" and "学业状况" in content:
+                if msg["role"] == "assistant" and f"{_get_work_or_study_term()}状况" in content:
                     guide_msg_idx = i
 
             # 按顺序显示所有内容
@@ -3482,7 +3512,7 @@ def main():
 
     elif is_in_story_flow() and current_target == "comic_confirmed":
         st.markdown(
-            f"### 🎬 {'学业' if current_context == CONTEXT_ACADEMIC else '人际'}故事连环画"
+            f"### 🎬 {_get_work_or_study_term()}故事连环画"
         )
         render_messages()
         _render_comic_complete_view()
