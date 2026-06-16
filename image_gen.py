@@ -156,7 +156,7 @@ def extract_character_features(description: str, gender: str = "unknown") -> Dic
         return {"gender": gender, "hair": "", "eyes": "", "face_shape": "", "clothing_style": "",
                 "distinctive_features": []}
 
-def generate_portrait(description: str, session_id: str, style: str = "写实", gender: str = "unknown") -> Dict[str, Any]:
+def generate_portrait(description: str, session_id: str, style: str = "写实", gender: str = "unknown", status: str = "study") -> Dict[str, Any]:
     """生成角色画像"""
     style_info = IMAGE_STYLES.get(style, IMAGE_STYLES["写实"])
 
@@ -166,9 +166,10 @@ def generate_portrait(description: str, session_id: str, style: str = "写实", 
     timestamp = int(time.time())
     output_path = os.path.join(session_images_dir, f"portrait_{style}_{timestamp}.png")
 
-    gender_word = "女性" if gender == "female" else "男性" if gender == "male" else "学生"
+    gender_word = "女性" if gender == "female" else "男性" if gender == "male" else "人物"
+    role_word = "大学生" if status == "study" else "职场人士"
 
-    prompt = f"""生成一张{gender_word}大学生的肖像画。
+    prompt = f"""生成一张{gender_word}{role_word}的肖像画。
 
 {style_info["prompt_suffix"]}
 
@@ -216,7 +217,7 @@ def generate_comic_frame(
 
 重要要求：
 - 单幅漫画画面，不是三视图
-- 角色形象与参考图片中的形象一致，注意参考的是参考图中的形象，不是人物数量
+- 角色形象与参考图片中的形象一致，注意参考的是参考图中的形象，不是人物动作
 - 画面构图完整，有背景环境"""
 
     has_reference = False
