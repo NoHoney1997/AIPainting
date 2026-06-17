@@ -51,8 +51,8 @@ llm_client = OpenAI(
 IMAGE_STYLES = {
     "写实": {
         "name": "写实风格",
-        "description": "真实自然的人物形象，温暖色调",
-        "prompt_suffix": "写实摄影风格，高清画质，温暖柔和的光线，简洁背景"
+        "description": "真实自然的人物形象",
+        "prompt_suffix": "写实摄影风格，高清画质，简洁背景"
     },
     "动漫": {
         "name": "动漫风格",
@@ -108,17 +108,19 @@ def ensure_dir(path: str) -> None:
     """确保目录存在"""
     os.makedirs(path, exist_ok=True)
 
-def extract_character_features(description: str, gender: str = "unknown") -> Dict[str, Any]:
+def extract_character_features(description: str, gender: str = "unknown", age: str = "") -> Dict[str, Any]:
     """使用LLM提取角色特征"""
     prompt = f"""从以下角色外貌描述中提取视觉特征。
 **重要：只提取描述中明确提到的内容，不要添加未提及的特征。**
 
 描述：{description}
 性别：{gender}
+年龄：{age}
 
 返回JSON，只包含明确提到的字段：
 {{
     "gender": "{gender}",
+    "age": "{age}",
     "hair": "仅当提到发型/发色时填写",
     "eyes": "仅当提到眼睛特征（如戴眼镜）时填写",
     "face_shape": "仅当提到脸型时填写",
@@ -153,10 +155,10 @@ def extract_character_features(description: str, gender: str = "unknown") -> Dic
 
         return features
     except:
-        return {"gender": gender, "hair": "", "eyes": "", "face_shape": "", "clothing_style": "",
+        return {"gender": gender, "age": age, "hair": "", "eyes": "", "face_shape": "", "clothing_style": "",
                 "distinctive_features": []}
 
-def generate_portrait(description: str, session_id: str, style: str = "写实", gender: str = "unknown", status: str = "study") -> Dict[str, Any]:
+def generate_portrait(description: str, session_id: str, style: str = "写实", gender: str = "unknown", status: str = "study", age: str = "") -> Dict[str, Any]:
     """生成角色画像"""
     style_info = IMAGE_STYLES.get(style, IMAGE_STYLES["写实"])
 
@@ -169,7 +171,10 @@ def generate_portrait(description: str, session_id: str, style: str = "写实", 
     gender_word = "女性" if gender == "female" else "男性" if gender == "male" else "人物"
     role_word = "大学生" if status == "study" else "职场人士"
 
-    prompt = f"""生成一张{gender_word}{role_word}的肖像画。
+    # 处理年龄描述
+    age_desc = f"{age}岁" if age and age.isdigit() else (age if age else "")
+
+    prompt = f"""生成一张{gender_word}{role_word}{f"的{age_desc}" if age_desc else ""}的肖像画。
 
 {style_info["prompt_suffix"]}
 
@@ -232,7 +237,7 @@ def generate_comic_frame(
 {description}
 
 重要要求：
-- 单幅漫画画面，不是三视图
+- 单幅漫画画面，
 - 角色形象与参考图片中的形象一致，注意参考的是参考图中的形象，不是人物动作
 - 画面构图完整，有背景环境"""
 

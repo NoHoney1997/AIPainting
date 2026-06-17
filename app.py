@@ -111,7 +111,7 @@ STAGE_NAMES = {
 
 # 阶段目标
 STAGE_GOALS = {
-    "S0a": "引导用户为虚构人物命名、确定性别，并说明上学或工作的具体信息",
+    "S0a": "引导用户为虚构人物命名、确定年龄和性别，并说明上学或工作的具体信息",
     "S0b": "引导用户描述角色的外貌特征",
     "S0c": "询问用户想要的画像风格，然后生成画像",
     "S0d": "简短确认角色形象，过渡到后续故事",
@@ -145,10 +145,10 @@ STAGE_GOALS = {
 
 # 阶段提示参考
 STAGE_REFS = {
-    "S0a": "今天一起创作一个角色——先认识一下TA。请构思一个虚构的人物，TA叫什么？性别是？现在是在上学还是工作？",
+    "S0a": "今天一起创作一个角色——先认识一下TA。请构思一个虚构的人物，TA的姓名是？性别是？年龄多大了？现在是在上学还是工作？",
     "S0b": "让{name}的形象更具体——TA长什么样？发型、脸型、眉眼、身材、穿衣风格？整体气质偏活泼还是沉静？",
     "S0c": "好的，{name}的形象很清晰了。接下来我来生成TA的画像。你想用什么风格？比如：写实、动漫、水彩、素描、油画、国风，或者你喜欢的其他风格都可以告诉我。",
-    "S0d": "这就是{name}了——看起来是个有故事的人。接下来我们一起来探索TA的某个故事。",
+    "S0d": "这就是{name}了——看起来是个有故事的人。接下来我们一起来探索TA的某些故事。",
     "A1a": "每个人都会遇到各种状况——{name}在{work_or_study}方面有没有什么让TA感到困扰或沮丧的事？可以是某次具体的事情，也可以是TA一直以来的某种处境或状态。",
     "A1b": "能再说具体一点吗？",
     "A1c": "当时{name}是什么反应？做了什么？或者有什么想做的但没做？",
@@ -216,7 +216,7 @@ TARGET_DESCRIPTIONS = {
 }
 
 TARGET_SUFFICIENCY_CRITERIA = {
-    "S0a": "用户明确提供了角色姓名、性别，并说明上学或工作；若上学还需学段/年级，大学则需要进一步说明专业，若工作还需职业和工龄",
+    "S0a": "用户明确提供了角色姓名、年龄、性别，并说明上学或工作；若上学还需学段/年级，大学则需要进一步说明专业，若工作还需职业和工龄",
     "S0b": "用户描述了至少三处具体外貌或气质特征，而非仅一个词。",
     "story_dilemma": "用户说明了角色具体的困扰、事件或持续处境，有实质内容而非空泛表述。",
     "story_context": "用户补充了具体场合、在场人物或发生了什么，能让场景成形。",
@@ -230,7 +230,7 @@ TARGET_SUFFICIENCY_CRITERIA = {
 }
 
 TARGET_COLLECT_PROMPTS = {
-    "S0a": "虚构角色的姓名、性别、上学/工作状态，以及对应学段/学历或职业与工龄，大学需要专业，可含一点性格或特点。",
+    "S0a": "虚构角色的年龄、姓名、性别、上学/工作状态，以及对应学段/学历或职业与工龄，大学需要专业，可含一点性格或特点。",
     "S0b": "角色的外貌：发型、脸型、眉眼、身材、穿衣风格、常见表情或整体气质。",
     "story_dilemma": "角色遇到了什么{work_or_study}/人际困扰？是什么事件或处境？",
     "story_context": "具体场合、在场人物、当时发生了什么细节？",
@@ -840,9 +840,9 @@ def parse_user_input_with_llm(stage: str, user_input: str, context: Dict[str, An
     """使用LLM解析用户输入，提取当前阶段需要存储的数据"""
 
     extraction_prompts = {
-        "S0a": """从用户输入提取：name(姓名), gender(female/male), status(study/work), education_level(学段/学历), occupation(职业), work_years(工龄)。只提取明确提到的，没有就留空。
+        "S0a": """从用户输入提取：name(姓名), age(年龄), gender(female/male), status(study/work), education_level(学段/学历), occupation(职业), work_years(工龄)。只提取明确提到的，没有就留空。
 用户输入：{input}
-返回JSON：{{"name": "", "gender": "", "status": "", "education_level": "", "occupation": "", "work_years": ""}}""",
+返回JSON：{{"name": "", "age": "", "gender": "", "status": "", "education_level": "", "occupation": "", "work_years": ""}}""",
 
         "S0b": """提取用户描述的外貌特征，保持原意不添加。用户输入：{input}
 返回JSON：{{"appearance": ""}}""",
@@ -929,7 +929,7 @@ def generate_guide_message(stage: str, context: Dict[str, Any] = None, add_trans
 
     # S0a 阶段且 add_transition=True 时添加过渡句
     if add_transition and stage == "S0a":
-        transition = "好，那我们开始吧。先来认识一下你的角色——"
+        transition = "好，那我们开始吧。"
         ref = transition + ref
 
     return ref
@@ -959,13 +959,14 @@ def evaluate_s0_sufficiency(stage: str, user_input: str, history: List[Dict]) ->
     if stage == "S0a":
         system_prompt = """你是创作对话评估助手。判断用户是否为角色提供了充分的设定信息。
 
-【当前目标】引导用户为虚构人物命名、确定性别，并说明现在是在上学还是工作。
+【当前目标】引导用户为虚构人物命名、确定年龄和性别，并说明现在是在上学还是工作。
 
 【充分回答标准（须全部满足才能 is_sufficient=true）】
 1. 角色有明确姓名（不等于"他/她/TA"）
-2. 用户说明了性别（male/female/男/女等）
-3. 用户说明了当前状态：上学或工作
-4. 若状态为上学，需包含学段或年级；若状态为工作，需包含职业和大致工龄
+2. 用户说明了年龄（如具体年龄数字，或"二十多岁""中年"等年龄段描述）
+3. 用户说明了性别（male/female/男/女等）
+4. 用户说明了当前状态：上学或工作
+5. 若状态为上学，需包含学段或年级；若状态为工作，需包含职业和大致工龄
 
 【追问标准】
 当上述任一条件缺失时，follow_up_needed=true，并生成一句自然追问语补足缺失项。
@@ -973,7 +974,7 @@ def evaluate_s0_sufficiency(stage: str, user_input: str, history: List[Dict]) ->
 追问要像编剧在确认角色档案，不像是问卷。
 
 【提取】
-从用户输入中提取：name, gender, status, education_level, occupation, work_years。"""
+从用户输入中提取：name, age, gender, status, education_level, occupation, work_years。"""
 
         user_prompt = f"""对话摘要：
 {history_summary}
@@ -981,7 +982,7 @@ def evaluate_s0_sufficiency(stage: str, user_input: str, history: List[Dict]) ->
 用户最新输入：{user_input}
 
 只返回JSON：
-{{"is_sufficient": true/false, "follow_up_needed": true/false, "follow_up_message": "追问语（仅当 is_sufficient=false 时）", "extracted_data": {{"name":"", "gender":"", "status":"", "education_level":"", "occupation":"", "work_years":""}}}}"""
+{{"is_sufficient": true/false, "follow_up_needed": true/false, "follow_up_message": "追问语（仅当 is_sufficient=false 时）", "extracted_data": {{"name":"", "age":"", "gender":"", "status":"", "education_level":"", "occupation":"", "work_years":""}}}}"""
 
     elif stage == "S0b":
         system_prompt = """你是创作对话评估助手。判断用户是否提供了足够的外貌描述。
@@ -1044,12 +1045,13 @@ def evaluate_s0_sufficiency(stage: str, user_input: str, history: List[Dict]) ->
         stripped = user_input.strip()
         if stage == "S0a":
             name = st.session_state.get("character_name", "")
+            age = st.session_state.get("character_age", "")
             gender = st.session_state.get("character_gender", "")
             status = st.session_state.get("character_status", "")
             education_level = st.session_state.get("character_education_level", "")
             occupation = st.session_state.get("character_occupation", "")
             work_years = st.session_state.get("character_work_years", "")
-            base_ok = bool(name and gender and status)
+            base_ok = bool(name and age and gender and status)
             study_ok = bool(education_level)
             work_ok = bool(occupation and work_years)
             is_sufficient = base_ok and (study_ok or work_ok)
@@ -1212,6 +1214,8 @@ def store_data(stage: str, user_input: str):
     if stage == "S0a":
         if extracted.get("name"):
             st.session_state.character_name = extracted["name"]
+        if extracted.get("age"):
+            st.session_state.character_age = extracted["age"]
         if extracted.get("gender"):
             st.session_state.character_gender = extracted["gender"]
         if extracted.get("status"):
@@ -1327,6 +1331,7 @@ def save_session():
         "collected_targets": st.session_state.get("collected_targets", _empty_collected_targets()),
         "current_target": st.session_state.get("current_target", ""),
         "character_name": st.session_state.get("character_name", ""),
+        "character_age": st.session_state.get("character_age", ""),
         "character_status": st.session_state.get("character_status", ""),
         "character_education_level": st.session_state.get("character_education_level", ""),
         "character_occupation": st.session_state.get("character_occupation", ""),
@@ -1567,6 +1572,7 @@ def load_session_to_state(session_id: str):
         st.session_state.app_phase = "S0a"
 
     st.session_state.character_name = session_data.get("character_name", "")
+    st.session_state.character_age = session_data.get("character_age", "")
     st.session_state.character_status = session_data.get("character_status", "")
     st.session_state.character_education_level = session_data.get("character_education_level", "")
     st.session_state.character_occupation = session_data.get("character_occupation", "")
@@ -1693,6 +1699,9 @@ def init_session_state():
 
     if "character_name" not in st.session_state:
         st.session_state.character_name = ""
+
+    if "character_age" not in st.session_state:
+        st.session_state.character_age = ""
 
     if "character_major" not in st.session_state:
         st.session_state.character_major = ""
@@ -2158,7 +2167,10 @@ def render_portrait_ui():
 
     if st.session_state.portrait_generating:
         with st.spinner("正在生成画像，请稍候..."):
-            features = extract_character_features(st.session_state.character_appearance)
+            features = extract_character_features(
+                st.session_state.character_appearance,
+                age=st.session_state.get("character_age", "")
+            )
             st.session_state.character_features = features
 
             result = generate_portrait(
@@ -2166,7 +2178,8 @@ def render_portrait_ui():
                 st.session_state.session_id,
                 style=st.session_state.portrait_style,
                 gender=st.session_state.get("character_gender", "unknown"),
-                status=st.session_state.get("character_status", "study")
+                status=st.session_state.get("character_status", "study"),
+                age=st.session_state.get("character_age", "")
             )
 
             st.session_state.portrait_generating = False
@@ -2209,7 +2222,10 @@ def render_portrait_ui():
         col1, col2 = st.columns(2)
         with col1:
             if st.button("✓ 确认画像", type="primary"):
-                features = extract_character_features(st.session_state.character_appearance)
+                features = extract_character_features(
+                    st.session_state.character_appearance,
+                    age=st.session_state.get("character_age", "")
+                )
                 st.session_state.character_features = features
                 st.session_state.portrait_final = _copy_to_final(st.session_state.portrait_path)
 
