@@ -2763,7 +2763,7 @@ def _render_comic_generation_view():
     confirmed_count = len([f for f in comic_data.get("frames", []) if f.get("final_path")])
     generated_count = len([f for f in comic_data.get("frames", []) if f.get("image_path")])
     
-    st.markdown(f"**进度：{confirmed_count}/{total_frames} 格已确认，{generated_count}/{total_frames} 格已生成**")
+    st.markdown(f"**进度：{generated_count}/{total_frames} 格已生成**")
     
     # 底部工具栏
     col1, col2, col3 = st.columns(3)

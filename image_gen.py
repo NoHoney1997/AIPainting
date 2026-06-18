@@ -52,34 +52,40 @@ IMAGE_STYLES = {
     "写实": {
         "name": "写实风格",
         "description": "真实自然的人物形象",
-        "prompt_suffix": "写实摄影风格，高清画质，简洁背景"
+        "prompt_suffix": "写实摄影风格，真实人物肖像，高清画质，柔和光影，自然肤色"
     },
     "动漫": {
         "name": "动漫风格",
         "description": "二次元动漫人物，色彩鲜明",
-        "prompt_suffix": "动漫风格，Anime style，明亮的眼睛，清晰的线条感"
+        "prompt_suffix": "日系动漫风格，Anime style，明亮的眼睛，高光瞳孔，清晰的线条，鲜艳的色彩"
     },
     "水彩": {
         "name": "水彩风格",
         "description": "艺术水彩画效果，柔和优雅",
-        "prompt_suffix": "水彩画风格，watercolor painting，柔和的色彩过渡"
+        "prompt_suffix": "水彩画风格，watercolor painting，柔和色彩过渡，纸张纹理，艺术感"
     },
     "素描": {
         "name": "素描风格",
         "description": "铅笔素描效果，简约有力",
-        "prompt_suffix": "铅笔素描风格，pencil sketch，黑白或灰色调"
+        "prompt_suffix": "铅笔素描风格，pencil sketch，黑白灰调子，线条分明，质感清晰"
     },
     "油画": {
         "name": "油画风格",
         "description": "古典油画效果，厚重质感",
-        "prompt_suffix": "油画风格，oil painting，丰富的色彩层次"
+        "prompt_suffix": "油画风格，oil painting，厚重笔触，丰富色彩层次，古典质感"
     },
     "国风": {
         "name": "国风风格",
         "description": "中国传统水墨画效果",
-        "prompt_suffix": "中国水墨画风格，Chinese ink painting，淡淡的水墨晕染"
+        "prompt_suffix": "中国水墨画风格，Chinese ink painting，淡雅墨色，留白意境，写意风格"
     }
 }
+
+# 负面提示词（用于排除常见问题）
+# =============================================================================
+NEGATIVE_PROMPT = """畸形的手，不完整的身体，多余的手指，模糊的面部，五官错位，
+多余的角色，背景杂乱，水印，低分辨率，模糊，过度曝光，不自然的表情，
+身材变形，比例失调，多余肢体"""
 
 def get_available_styles() -> List[Dict[str, str]]:
     """获取可用的图像风格列表"""
@@ -121,11 +127,13 @@ def extract_character_features(description: str, gender: str = "unknown", age: s
 {{
     "gender": "{gender}",
     "age": "{age}",
-    "hair": "仅当提到发型/发色时填写",
-    "eyes": "仅当提到眼睛特征（如戴眼镜）时填写",
+    "hair": "仅当提到发型时填写",
+    "hair_color": "仅当提到发色时填写",
     "face_shape": "仅当提到脸型时填写",
+    "eyes": "仅当提到眼睛特征（如戴眼镜、眼型）时填写",
     "clothing_style": "仅当提到穿着时填写",
-    "distinctive_features": ["仅当提到独特特征时添加"]
+    "temperament": "仅当提到气质（如活泼、沉静、温柔）时填写",
+    "distinctive_features": ["仅当提到独特特征时添加，如泪痣、雀斑、疤痕等"]
 }}
 
 没有提到的字段设为空字符串。只返回JSON。"""
@@ -155,12 +163,12 @@ def extract_character_features(description: str, gender: str = "unknown", age: s
 
         return features
     except:
-        return {"gender": gender, "age": age, "hair": "", "eyes": "", "face_shape": "", "clothing_style": "",
-                "distinctive_features": []}
+        return {"gender": gender, "age": age, "hair": "", "hair_color": "", "face_shape": "",
+                "eyes": "", "clothing_style": "", "temperament": "", "distinctive_features": []}
 
 def generate_portrait(description: str, session_id: str, style: str = "写实", gender: str = "unknown", status: str = "study", age: str = "") -> Dict[str, Any]:
     """生成角色画像"""
-    style_info = IMAGE_STYLES.get(style, IMAGE_STYLES["写实"])
+    style_info = IMAGE_STYLES.get(style, IMAGE_STYLES["动漫"])
 
     session_images_dir = os.path.join(DATA_DIR, "sessions", session_id, "images")
     ensure_dir(session_images_dir)
@@ -173,15 +181,24 @@ def generate_portrait(description: str, session_id: str, style: str = "写实", 
 
     # 处理年龄描述
     age_desc = f"{age}岁" if age and age.isdigit() else (age if age else "")
+    # 完整角色描述
+    # 完整角色描述
+    character_desc = f"{gender_word}{role_word}{f'，{age_desc}' if age_desc else ''}"
+    prompt = f"""生成一张{character_desc}的肖像画。
 
-    prompt = f"""生成一张{gender_word}{role_word}{f"的{age_desc}" if age_desc else ""}的肖像画。
-
-{style_info["prompt_suffix"]}
+风格要求：{style_info["prompt_suffix"]}
 
 外貌特征：
 {description}
 
-要求：全身像，不凸显身材，人物居中，背景简洁"""
+构图要求：
+- 全身肖像，人物居中
+- 正面或微侧面视角
+- 背景简洁干净
+- 面部特征清晰，细节丰富
+- 保持中性自然姿态
+- 光线柔和均匀"""
+
 
     for attempt in range(3):
         try:
@@ -198,9 +215,20 @@ def generate_portrait(description: str, session_id: str, style: str = "写实", 
 def _summarize_character_features(features: Dict[str, Any]) -> str:
     """将角色特征字典汇总为一段自然语言描述"""
     parts = []
-    for key, value in features.items():
-        if value and value not in (None, "", [], {}):
-            parts.append(f"{key}: {value}")
+    if features.get("hair"):
+        parts.append(f"发型：{features['hair']}")
+    if features.get("hair_color"):
+        parts.append(f"发色：{features['hair_color']}")
+    if features.get("face_shape"):
+        parts.append(f"脸型：{features['face_shape']}")
+    if features.get("eyes"):
+        parts.append(f"眼睛：{features['eyes']}")
+    if features.get("clothing_style"):
+        parts.append(f"服装：{features['clothing_style']}")
+    if features.get("temperament"):
+        parts.append(f"气质：{features['temperament']}")
+    if features.get("distinctive_features"):
+        parts.append(f"标志性特征：{'、'.join(features['distinctive_features'])}")
     return "；".join(parts) if parts else ""
 
 
@@ -226,20 +254,24 @@ def generate_comic_frame(
     appearance_text = character_features_text
     if not appearance_text and character_features:
         appearance_text = _summarize_character_features(character_features)
-    prompt = f"""生成一幅漫画风格的单幅场景画面。
+    prompt = f"""生成一幅场景画面。
 
 风格：{style_info["prompt_suffix"]}
 
-角色外貌参考：
+主人公外貌描述：
 {appearance_text}
 
 场景描述：
 {description}
 
 重要要求：
-- 单幅漫画画面，
-- 角色形象与参考图片中的形象一致，注意参考的是参考图中的形象，不是人物动作
-- 画面构图完整，有背景环境"""
+- 单幅画面，表现一个完整场景
+- 主人公角色形象参考主人公外貌描述
+- 包含场景环境，有氛围感
+- 画面构图完整
+- 色彩与风格统一
+- 高质量、高清晰度
+- 注意参考的是参考图中的形象，不是人物动作"""
 
     has_reference = False
 
@@ -283,7 +315,8 @@ def generate_comic_frame(
 
 def _call_wanx_t2i(prompt: str) -> str:
     """调用通义万相文生图 API"""
-    content = [{"text": prompt}]
+    full_prompt = f"{prompt}\n\n规避以下问题：{NEGATIVE_PROMPT}"
+    content = [{"text": full_prompt}]
 
     payload = {
         "model": IMAGE_GEN_MODEL,
@@ -333,10 +366,13 @@ def _call_wanx_t2i_with_ref(prompt: str, ref_image_path: str) -> str:
     with open(ref_image_path, "rb") as f:
         img_base64 = base64.b64encode(f.read()).decode()
 
+    full_prompt = f"{prompt}\n\n规避以下问题：{NEGATIVE_PROMPT}"
+
     content = [
         {"image": f"data:image/png;base64,{img_base64}"},
-        {"text": prompt}
+        {"text": full_prompt}
     ]
+
 
     payload = {
         "model": IMAGE_GEN_MODEL,
