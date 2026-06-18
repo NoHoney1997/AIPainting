@@ -2,6 +2,8 @@
 AI共创叙事画坊 - Streamlit 应用
 一个结合AI对话与图像生成的互动叙事平台
 """
+import io
+import zipfile
 import streamlit as st
 import os
 import json
@@ -3238,6 +3240,48 @@ def render_done_ui():
                     st.image(final_path, width=280, caption=f"第{i+1}格")
         else:
             st.info("尚未生成人际故事连环画")
+
+    # 保存创作到本地
+    st.markdown("---")
+    st.markdown("### 💾 保存你的创作")
+    st.markdown("点击下方按钮，可以将本次创作的完整数据（对话记录 + 生成图片）下载到本地。")
+
+    if st.button("打包下载本次创作", type="primary"):
+        session_id = st.session_state.get("session_id", "")
+        storage_name = st.session_state.get("storage_name", session_id)
+        session_dir = os.path.join(DATA_DIR, "sessions", storage_name)
+
+        if not os.path.exists(session_dir):
+            st.error("未找到会话数据，无法打包。")
+        else:
+            zip_buffer = io.BytesIO()
+            with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zf:
+                # 写入 session.json
+                session_file = os.path.join(session_dir, "session.json")
+                if os.path.exists(session_file):
+                    zf.write(session_file, arcname="session.json")
+
+                # 写入 log.json
+                log_file = os.path.join(session_dir, "log.json")
+                if os.path.exists(log_file):
+                    zf.write(log_file, arcname="log.json")
+
+                # 写入所有图片
+                images_dir = os.path.join(session_dir, "images")
+                if os.path.exists(images_dir):
+                    for img_name in os.listdir(images_dir):
+                        img_path = os.path.join(images_dir, img_name)
+                        if os.path.isfile(img_path):
+                            zf.write(img_path, arcname=os.path.join("images", img_name))
+
+            zip_buffer.seek(0)
+            st.download_button(
+                label="确认下载 ZIP 文件",
+                data=zip_buffer.getvalue(),
+                file_name=f"AIPainting_{storage_name}.zip",
+                mime="application/zip",
+            )
+            st.success("打包完成，点击上方按钮即可下载。")
 
     st.markdown("---")
     st.markdown("感谢你的时间和创意！如有需要可以重新开始。")
