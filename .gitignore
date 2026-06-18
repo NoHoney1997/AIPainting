@@ -1,0 +1,26 @@
+# 环境变量（包含 API Key，绝对不能提交）
+.env
+
+# Python 缓存
+__pycache__/
+*.pyc
+*.pyo
+
+# 虚拟环境
+venv/
+.venv/
+
+# IDE
+.idea/
+.vscode/
+
+# 数据目录（包含用户生成内容）
+data/sessions/
+data/*.json
+
+# 测试文件
+test.py
+
+# 系统文件
+.DS_Store
+Thumbs.db
