@@ -3251,37 +3251,75 @@ def render_done_ui():
         storage_name = st.session_state.get("storage_name", session_id)
         session_dir = os.path.join(DATA_DIR, "sessions", storage_name)
 
-        if not os.path.exists(session_dir):
-            st.error("未找到会话数据，无法打包。")
-        else:
-            zip_buffer = io.BytesIO()
-            with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zf:
-                # 写入 session.json
-                session_file = os.path.join(session_dir, "session.json")
-                if os.path.exists(session_file):
-                    zf.write(session_file, arcname="session.json")
+        zip_buffer = io.BytesIO()
+        with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zf:
+            session_data = {
+                "session_id": session_id,
+                "storage_name": storage_name,
+                "start_time": st.session_state.get("start_time", ""),
+                "last_updated": datetime.now().isoformat(),
+                "app_phase": get_app_phase(),
+                "current_stage": get_app_phase(),
+                "story_flow_active": st.session_state.get("story_flow_active", False),
+                "current_context": st.session_state.get("current_context", CONTEXT_ACADEMIC),
+                "collected_targets": st.session_state.get("collected_targets", _empty_collected_targets()),
+                "current_target": st.session_state.get("current_target", ""),
+                "character_name": st.session_state.get("character_name", ""),
+                "character_age": st.session_state.get("character_age", ""),
+                "character_status": st.session_state.get("character_status", ""),
+                "character_education_level": st.session_state.get("character_education_level", ""),
+                "character_occupation": st.session_state.get("character_occupation", ""),
+                "character_work_years": st.session_state.get("character_work_years", ""),
+                "character_major": st.session_state.get("character_major", ""),
+                "character_grade": st.session_state.get("character_grade", ""),
+                "character_appearance": st.session_state.get("character_appearance", ""),
+                "character_features": st.session_state.get("character_features", {}),
+                "portrait_style": st.session_state.get("portrait_style", ""),
+                "portrait_path": st.session_state.get("portrait_path", ""),
+                "portrait_final": st.session_state.get("portrait_final", ""),
+                "portrait_versions": st.session_state.get("portrait_versions", []),
+                "portrait_adjustment_count": st.session_state.get("portrait_adjustment_count", 0),
+                "messages": st.session_state.get("messages", []),
+                "stage_A_material": st.session_state.get("stage_A_material", {}),
+                "stage_A2a_quote": st.session_state.get("stage_A2a_quote", ""),
+                "stage_A2b_reflection": st.session_state.get("stage_A2b_reflection", ""),
+                "stage_A2c_framing": st.session_state.get("stage_A2c_framing", ""),
+                "stage_A_comic": st.session_state.get("stage_A_comic", {}),
+                "comic_style": st.session_state.get("comic_style", st.session_state.get("portrait_style", "动漫")),
+                "comic_story_generated": st.session_state.get("comic_story_generated", False),
+                "comic_story_approved": st.session_state.get("comic_story_approved", False),
+                "comic_story_data": st.session_state.get("comic_story_data", []),
+                "stage_B_material": st.session_state.get("stage_B_material", {}),
+                "stage_B2a_quote": st.session_state.get("stage_B2a_quote", ""),
+                "stage_B2b_reflection": st.session_state.get("stage_B2b_reflection", ""),
+                "stage_B2c_framing": st.session_state.get("stage_B2c_framing", ""),
+                "stage_B_comic": st.session_state.get("stage_B_comic", {}),
+                "stage4_rewrite_A": st.session_state.get("stage4_rewrite_A", ""),
+                "stage4_rewrite_B": st.session_state.get("stage4_rewrite_B", ""),
+                "stage4_diff_A": st.session_state.get("stage4_diff_A", ""),
+                "stage4_diff_B": st.session_state.get("stage4_diff_B", ""),
+                "debrief_response": st.session_state.get("debrief_response", ""),
+            }
+            zf.writestr("session.json", json.dumps(session_data, ensure_ascii=False, indent=2))
 
-                # 写入 log.json
-                log_file = os.path.join(session_dir, "log.json")
-                if os.path.exists(log_file):
-                    zf.write(log_file, arcname="log.json")
+            log_entries = st.session_state.get("log_entries", [])
+            zf.writestr("log.json", json.dumps(log_entries, ensure_ascii=False, indent=2))
 
-                # 写入所有图片
-                images_dir = os.path.join(session_dir, "images")
-                if os.path.exists(images_dir):
-                    for img_name in os.listdir(images_dir):
-                        img_path = os.path.join(images_dir, img_name)
-                        if os.path.isfile(img_path):
-                            zf.write(img_path, arcname=os.path.join("images", img_name))
+            images_dir = os.path.join(session_dir, "images")
+            if os.path.exists(images_dir):
+                for img_name in os.listdir(images_dir):
+                    img_path = os.path.join(images_dir, img_name)
+                    if os.path.isfile(img_path):
+                        zf.write(img_path, arcname=os.path.join("images", img_name))
 
-            zip_buffer.seek(0)
-            st.download_button(
-                label="确认下载 ZIP 文件",
-                data=zip_buffer.getvalue(),
-                file_name=f"AIPainting_{storage_name}.zip",
-                mime="application/zip",
-            )
-            st.success("打包完成，点击上方按钮即可下载。")
+        zip_buffer.seek(0)
+        st.download_button(
+            label="确认下载 ZIP 文件",
+            data=zip_buffer.getvalue(),
+            file_name=f"AIPainting_{storage_name}.zip",
+            mime="application/zip",
+        )
+        st.success("打包完成，点击上方按钮即可下载。")
 
     st.markdown("---")
     st.markdown("感谢你的时间和创意！如有需要可以重新开始。")
